@@ -1,6 +1,7 @@
 #include <asm/types.h>
 #include <glib.h>
 #include <stdio.h>
+#include <blktrace_api.h>
 #include "plugins.h"
 
 #define BLK_SHIFT 9
@@ -45,14 +46,22 @@ void print_results(void *data)
 
 void reqsize_init(struct plugin *p) 
 {
-	p->data = g_new0(struct reqsize_data,1);
+	p->data = g_new(struct reqsize_data,1);
 }
 
 void reqsize_ops_init(struct plugin_ops *po)
 {
-	po->C = C;
 	po->add = add;
 	po->print_results = print_results;
+	
+	po->event_ht = g_hash_table_new(g_int_hash, g_hash_equal);
+	/* association of event int and function */
+	g_hash_table_insert(po->event_ht,BLK_TA_COMPLETE,C);
+}
+
+void reqsize_ops_destroy(struct plugin_ops *po) 
+{
+	g_hash_table_destroy(po->event_ht);
 }
 
 void reqsize_destroy(struct plugin *p)
