@@ -1,5 +1,9 @@
+#ifndef _PLUGINS_H_
+#define _PLUGINS_H_
+
+#include <glib.h>
 #include <blktrace_api.h>
-#include "inits.h"
+#include <inits.h>
 
 typedef void (*event_func_t)(const struct blk_io_trace *, void *);
 struct plugin_ops 
@@ -31,16 +35,6 @@ struct plug_init_dest_funcs
 	void (*ops_destroy)(struct plugin_ops *po);
 };
 
-/* list of initilizers and destroyers for each function */
-const int n_plugins = 1;
-struct plug_init_dest_funcs plug_init_dest[] =
-{
-	{reqsize_init, reqsize_destroy, reqsize_ops_init, reqsize_ops_destroy}
-};
-
-/* array of operations and function initializer */
-struct plugin_ops ps_ops[n_plugins];
-
 /* functions to create & destroy a plugin set */
 struct plugin_set 
 {
@@ -55,4 +49,6 @@ struct plugin_set *plugin_set_create();
 void plugin_set_destroy(struct plugin_set *ps);
 void plugin_set_print(const struct plugin_set *ps, const char *head);
 void plugin_set_add_trace(struct plugin_set *ps, const struct blk_io_trace *t);
+void plugin_set_add(struct plugin_set *ps1, const struct plugin_set *ps2);
 
+#endif

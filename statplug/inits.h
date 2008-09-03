@@ -1,3 +1,6 @@
+#ifndef _INITS_H_
+#define _INITS_H_
+
 #include "plugins.h"
 
 /* avoid circular dependecies problems */
@@ -10,3 +13,4 @@ void reqsize_destroy(struct plugin *p);
 void reqsize_ops_init(struct plugin_ops *po);
 void reqsize_ops_destroy(struct plugin_ops *po);
 
+#endif

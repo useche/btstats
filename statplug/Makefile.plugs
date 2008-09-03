@@ -1,0 +1,2 @@
+PLUGS=statplug/reqsize.o
+PLUG_SRCS=statplug/reqsize.c

@@ -1,11 +1,22 @@
-APP=seg_pat_size
-APP_DEP=$(APP).o
-CFLAGS=-Wall -Wextra -pedantic `pkg-config --cflags glib-2.0` -std=c99 -fgnu89-inline
-LDFLAGS=-lgsl -lgslcblas -laio -lrt `pkg-config --libs glib-2.0`
+APP=btstats
+
+include statplug/Makefile.plugs
+
+DEV_TRACE=dev_trace.o
+APP_DEP=$(APP).o $(PLUGS) statplug/plugins.o $(DEV_TRACE)
+
+SRCS=dev_trace.c statplug/plugins.c $(APP).c $(PLUG_SRCS)
+
+CFLAGS=-Wall -Wextra -pedantic `pkg-config --cflags glib-2.0` -I. -Istatplug/ -Iinclude/ -std=c99
+LDFLAGS=`pkg-config --libs glib-2.0`
 CC=gcc
 
 $(APP): $(APP_DEP)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(APP_DEP) -o $(APP)
 
+depend:
+	makedepend -- $(CFLAGS) -- $(SRCS)
+
 clean:
 	rm -rf $(APP) $(APP_DEP)
+
