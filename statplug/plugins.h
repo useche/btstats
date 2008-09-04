@@ -10,7 +10,7 @@ struct plugin_ops
 {
 	/* hash table to find, given the event int,
 	   the function to call */
-	GHashTable *event_ht;
+	GTree *event_tree;
 
 	/* additional functions */
 	void (*add)(void *data1, const void *data2);

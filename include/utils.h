@@ -20,3 +20,11 @@
 
 #define BLK_SHIFT 9
 #define BYTES_TO_BLKS(byts) ((byts)>>BLK_SHIFT)
+
+inline static int comp_int(gconstpointer a,gconstpointer b) 
+{
+	int x = (int)a;
+	int y = (int)b;
+	
+	return x-y;
+}

@@ -12,6 +12,9 @@
 
 #include <assert.h>
 
+#include <blktrace.h>
+#include <blktrace_api.h>
+
 void read_next_trace(struct trace_file *tf) 
 {
 	int e;
@@ -21,12 +24,14 @@ void read_next_trace(struct trace_file *tf)
 		perror_exit("Reading trace");
 	else if(e==0)
 		tf->eof = TRUE;
-	else
+	else {
+		assert(e==sizeof(struct blk_io_trace));
 		if(tf->t.pdu_len) {
 			char pdu_buf[tf->t.pdu_len];
 			read(tf->fd,pdu_buf,tf->t.pdu_len);
 			if(e==-1) perror_exit("Reading trace pdu");
 		}
+	}
 }
 
 void find_input_traces(struct dev_trace *trace, const char *dev)
@@ -59,7 +64,7 @@ void find_input_traces(struct dev_trace *trace, const char *dev)
 struct dev_trace *dev_trace_create(const char *dev)
 {
 	struct dev_trace *dt = g_new(struct dev_trace,1);
-	dt->files = g_slist_alloc();	
+	dt->files = NULL;	
 	find_input_traces(dt,dev);
 	
 	return dt;
@@ -85,7 +90,7 @@ void min_time(gpointer data, gpointer min)
 	struct trace_file **mintf = (struct trace_file **)min;
 
 	if(!tf->eof) {
-		if(!min) {
+		if(!(*mintf)) {
 			*mintf = tf;
 		} else {
 			assert(tf->t.time!=(*mintf)->t.time);

@@ -63,14 +63,14 @@ void reqsize_ops_init(struct plugin_ops *po)
 	po->add = add;
 	po->print_results = print_results;
 	
-	po->event_ht = g_hash_table_new(g_int_hash, g_int_equal);
+	po->event_tree = g_tree_new(comp_int);
 	/* association of event int and function */
-	g_hash_table_insert(po->event_ht,(gpointer)BLK_TA_COMPLETE,C);
+	g_tree_insert(po->event_tree,(gpointer)BLK_TA_COMPLETE,C);
 }
 
 void reqsize_ops_destroy(struct plugin_ops *po) 
 {
-	g_hash_table_destroy(po->event_ht);
+	g_tree_destroy(po->event_tree);
 }
 
 void reqsize_destroy(struct plugin *p)

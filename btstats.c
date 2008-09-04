@@ -16,12 +16,12 @@ struct time_range
 
 void analyze_device(char *dev, 
 		    struct time_range range[],
+		    int nrange,
 		    struct plugin_set *ps) 
 {
 	int i;
 	struct blk_io_trace t;
 	struct dev_trace *dt;
-	int nrange = sizeof(range)/sizeof(struct time_range);
 	struct plugin_set *r_ps[nrange];
 	
 	/* init all plugin sets */
@@ -42,7 +42,8 @@ void analyze_device(char *dev,
 		char head[HEAD_MAX];
 		
 		/* adding the current plugin set to the global ps */
-		plugin_set_add(ps,r_ps[i]);
+		if(ps)
+			plugin_set_add(ps,r_ps[i]);
 		
 		sprintf(head,"%s [%.2f:%.2f]",
 			dev,
@@ -70,8 +71,8 @@ int main(int argc, char **argv)
 	
 	init_plugs_ops();	
 	
-	for(i = 0; i < ndevs; ++i)
-		analyze_device(devs[i],global_range,global_plugin);
+	for(i = 1; i < ndevs; ++i)
+		analyze_device(devs[i],global_range,1,global_plugin);
 	
 	if(global_plugin) {
 		plugin_set_print(global_plugin,"All");
