@@ -10,8 +10,8 @@
 
 struct time_range 
 {
-	double start;
-	double end;
+	__u64 start;
+	__u64 end;
 };
 
 void analyze_device(char *dev, 
@@ -45,7 +45,7 @@ void analyze_device(char *dev,
 		if(ps)
 			plugin_set_add(ps,r_ps[i]);
 		
-		sprintf(head,"%s [%.2f:%.2f]",
+		sprintf(head,"%s [%lld:%lld]",
 			dev,
 			range[i].start,
 			range[i].end);
@@ -65,7 +65,7 @@ int main(int argc, char **argv)
 	struct plugin_set *global_plugin = NULL;
 	
 	/* TODO: parse ranges, for now from beginnig to end */
-	struct time_range global_range[] = {{0,-1}};
+	struct time_range global_range[] = {{0,~0}};
 	
 	/* TODO: parse application arguments */
 	

@@ -75,6 +75,8 @@ void free_data(gpointer data, gpointer __unused)
 	struct trace_file *tf = (struct trace_file *)data;
 	close(tf->fd);
 	g_free(tf);
+
+	tf = __unused; /* useless. Just to make gcc quite */
 }
 
 void dev_trace_destroy(struct dev_trace *dt) 

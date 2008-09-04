@@ -42,18 +42,20 @@ void plugin_set_print(const struct plugin_set *ps, const char *head)
 	
 	printf("%s ==============================\n",head);
 	for(i = 0; i < N_PLUGINS; ++i)
-		ps->plugs[i].ops->print_results(&ps->plugs[i]);
+		ps->plugs[i].ops->print_results(ps->plugs[i].data);
 }
 
 void plugin_set_add_trace(struct plugin_set *ps, const struct blk_io_trace *t) 
 {
 	int i;
+	int act;
 	event_func_t event_handler;
 	struct plugin *p;
 	
 	for(i = 0; i < N_PLUGINS; ++i) {
 		p = &ps->plugs[i];
-		event_handler = g_tree_lookup(p->ops->event_tree,(gpointer)t->action);
+		act = t->action & 0xffff;
+		event_handler = g_tree_lookup(p->ops->event_tree,(gpointer)act);
 		if(event_handler)
 			event_handler(t,p->data);
 	}

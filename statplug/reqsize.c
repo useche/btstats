@@ -31,7 +31,7 @@ void C(struct blk_io_trace *t, void *data)
 	}
 }
 
-void add(void *data1, const void *data2) 
+void reqsize_add(void *data1, const void *data2) 
 {
 	DECL_ASSIGN_REQSIZE(rsd1,data1);
 	DECL_ASSIGN_REQSIZE(rsd2,data2);
@@ -42,7 +42,7 @@ void add(void *data1, const void *data2)
 	rsd1->reqs += rsd2->reqs;
 }
 
-void print_results(const void *data)
+void reqsize_print_results(const void *data)
 {
 	DECL_ASSIGN_REQSIZE(rsd,data);
 	
@@ -55,17 +55,21 @@ void print_results(const void *data)
 
 void reqsize_init(struct plugin *p) 
 {
-	p->data = g_new(struct reqsize_data,1);
+	struct reqsize_data *req = p->data = g_new(struct reqsize_data,1);
+	req->min = ~0;
+	req->max = 0;
+	req->total_size = 0;
+	req->reqs = 0;
 }
 
 void reqsize_ops_init(struct plugin_ops *po)
 {
-	po->add = add;
-	po->print_results = print_results;
+	po->add = reqsize_add;
+	po->print_results = reqsize_print_results;
 	
 	po->event_tree = g_tree_new(comp_int);
 	/* association of event int and function */
-	g_tree_insert(po->event_tree,(gpointer)BLK_TA_COMPLETE,C);
+	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_COMPLETE,C);
 }
 
 void reqsize_ops_destroy(struct plugin_ops *po) 
