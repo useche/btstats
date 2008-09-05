@@ -11,8 +11,9 @@ CFLAGS=-Wall -Wextra `pkg-config --cflags glib-2.0` -I. -Istatplug/ -Iinclude/ -
 LDFLAGS=`pkg-config --libs glib-2.0`
 CC=gcc
 
+#TODO depend to be added
 $(APP): $(APP_DEP)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(APP_DEP) -o $(APP)
+	$(CC) $(LDFLAGS) $(APP_DEP) -o $(APP)
 
 depend:
 	makedepend -- $(CFLAGS) -- $(SRCS)
