@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 
+#include <asm/types.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -15,7 +16,31 @@
 #include <blktrace.h>
 #include <blktrace_api.h>
 
-void read_next_trace(struct trace_file *tf) 
+void min_time(gpointer data, gpointer min)
+{
+	struct trace_file *tf = (struct trace_file *)data;
+	struct trace_file **mintf = (struct trace_file **)min;
+
+	if(!tf->eof) {
+		if(!(*mintf)) {
+			*mintf = tf;
+		} else {
+			assert(tf->t.time!=(*mintf)->t.time);
+			if(tf->t.time<(*mintf)->t.time)
+				*mintf = tf;
+		}
+	}
+}
+
+void correct_time(gpointer data, gpointer dt_arg)
+{
+	struct trace_file *tf = (struct trace_file *)data;
+	struct dev_trace *dt = (struct dev_trace *)dt_arg;
+	
+	tf->t.time -= dt->genesis;
+}
+
+void read_next_trace(struct trace_file *tf, __u64 genesis)
 {
 	int e;
 	
@@ -26,6 +51,10 @@ void read_next_trace(struct trace_file *tf)
 		tf->eof = TRUE;
 	else {
 		assert(e==sizeof(struct blk_io_trace));
+
+		/* updating to relative time right away */
+		tf->t.time -= genesis;
+
 		if(tf->t.pdu_len) {
 			char pdu_buf[tf->t.pdu_len];
 			read(tf->fd,pdu_buf,tf->t.pdu_len);
@@ -40,6 +69,7 @@ void find_input_traces(struct dev_trace *trace, const char *dev)
 	char pre_dev_trace[MAX_FILE_SIZE];
 	
 	struct trace_file *tf;
+	struct trace_file *min = NULL;
 	
 	DIR *cur_dir = opendir(".");
 
@@ -52,13 +82,19 @@ void find_input_traces(struct dev_trace *trace, const char *dev)
 			trace->files = g_slist_append(trace->files,tf);
 			
 			tf->fd = open(d->d_name,O_RDONLY);
-			if(tf->fd<0) perror_exit("Opening file");
+			if(tf->fd<0) perror_exit("Opening tracefile");
 			
 			tf->eof = FALSE;
 			
-			read_next_trace(tf);
+			read_next_trace(tf,0);
 		}
 	}
+
+	g_slist_foreach(trace->files,min_time,&min);
+	trace->genesis = min->t.time;
+	g_slist_foreach(trace->files,correct_time,trace);
+	
+	closedir(cur_dir);
 }
 
 struct dev_trace *dev_trace_create(const char *dev)
@@ -86,22 +122,6 @@ void dev_trace_destroy(struct dev_trace *dt)
 	g_free(dt);
 }
 
-void min_time(gpointer data, gpointer min) 
-{
-	struct trace_file *tf = (struct trace_file *)data;
-	struct trace_file **mintf = (struct trace_file **)min;
-
-	if(!tf->eof) {
-		if(!(*mintf)) {
-			*mintf = tf;
-		} else {
-			assert(tf->t.time!=(*mintf)->t.time);
-			if(tf->t.time<(*mintf)->t.time)
-				*mintf = tf;
-		}
-	}
-}
-
 gboolean dev_trace_read_next(const struct dev_trace *dt, struct blk_io_trace *t) 
 {
 	struct trace_file *min = NULL;
@@ -112,7 +132,7 @@ gboolean dev_trace_read_next(const struct dev_trace *dt, struct blk_io_trace *t)
 		return FALSE;
 	else {
 		*t = min->t;
-		read_next_trace(min);
+		read_next_trace(min, dt->genesis);
 		return TRUE;
 	}
 }

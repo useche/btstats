@@ -15,6 +15,7 @@ struct dev_trace
 {
 	char *dev;
 	GSList *files;
+	__u64 genesis;
 };
 
 struct dev_trace *dev_trace_create(const char *dev);
