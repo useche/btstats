@@ -26,20 +26,20 @@ struct plugin
 	struct plugin_ops *ops;
 };
 
-struct plug_init_dest_funcs
-{
-	/* init, destroy */
-	void (*init)(struct plugin *p);
-	void (*destroy)(struct plugin *p);
-	void (*ops_init)(struct plugin_ops *po);
-	void (*ops_destroy)(struct plugin_ops *po);
-};
-
 /* functions to create & destroy a plugin set */
 struct plugin_set 
 {
 	struct plugin *plugs;
 	int n;
+};
+
+struct plug_init_dest_funcs
+{
+	/* init, destroy */
+	void (*init)(struct plugin *p, struct plugin_set *ps);
+	void (*destroy)(struct plugin *p);
+	void (*ops_init)(struct plugin_ops *po);
+	void (*ops_destroy)(struct plugin_ops *po);
 };
 
 void init_plugs_ops();

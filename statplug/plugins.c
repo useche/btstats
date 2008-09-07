@@ -17,7 +17,7 @@ struct plugin_set *plugin_set_create()
 	
 	/* create and initilize a new set of plugins */
 	for(i = 0; i < N_PLUGINS; ++i) {
-		plug_init_dest[i].init(&tmp->plugs[i]);
+		plug_init_dest[i].init(&tmp->plugs[i], tmp);
 		tmp->plugs[i].ops = &ps_ops[i];
 	}
 	
