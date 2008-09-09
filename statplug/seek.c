@@ -88,11 +88,5 @@ void seek_ops_init(struct plugin_ops *po)
 	po->add = seek_add;
 	po->print_results = seek_print_results;
 	
-	po->event_tree = g_tree_new(comp_int);
 	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_COMPLETE,C);
-}
-
-void seek_ops_destroy(struct plugin_ops *po)
-{
-	g_tree_destroy(po->event_tree);
 }

@@ -12,12 +12,15 @@ struct plugin_set;
 void reqsize_init(struct plugin *p, struct plugin_set *ps);
 void reqsize_destroy(struct plugin *p);
 void reqsize_ops_init(struct plugin_ops *po);
-void reqsize_ops_destroy(struct plugin_ops *po);
 
 /* seek inits and destroyers */
 void seek_init(struct plugin *p, struct plugin_set *ps);
 void seek_destroy(struct plugin *p);
 void seek_ops_init(struct plugin_ops *po);
-void seek_ops_destroy(struct plugin_ops *po);
+
+/* d2c inits and destroyers */
+void d2c_init(struct plugin *p, struct plugin_set *ps);
+void d2c_destroy(struct plugin *p);
+void d2c_ops_init(struct plugin_ops *po);
 
 #endif

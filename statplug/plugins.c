@@ -4,6 +4,8 @@
 #include <plugins.h>
 #include <list_plugins.h>
 
+#include <utils.h>
+
 /* array of operations and function initializer */
 struct plugin_ops ps_ops[N_PLUGINS];
 
@@ -76,14 +78,20 @@ void plugin_set_add(struct plugin_set *ps1, const struct plugin_set *ps2)
 void init_plugs_ops() 
 {
 	int i;	
-	for(i = 0; i < N_PLUGINS; ++i)
-		plug_init_dest[i].ops_init(&ps_ops[i]);
+	for(i = 0; i < N_PLUGINS; ++i) {
+		ps_ops[i].event_tree = g_tree_new(comp_int);
+		if(plug_init_dest[i].ops_init)
+			plug_init_dest[i].ops_init(&ps_ops[i]);
+	}
 }
 
 void destroy_plugs_ops() 
 {
 	int i;	
-	for(i = 0; i < N_PLUGINS; ++i)
-		plug_init_dest[i].ops_destroy(&ps_ops[i]);
+	for(i = 0; i < N_PLUGINS; ++i) {
+		if(plug_init_dest[i].ops_destroy)
+			plug_init_dest[i].ops_destroy(&ps_ops[i]);
+		g_tree_destroy(ps_ops[i].event_tree);
+	}
 }
 
