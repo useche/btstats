@@ -6,19 +6,9 @@
 #include <plugins.h>
 #include <utils.h>
 
-#define DECL_ASSIGN_REQSIZE(name,data)		\
-	struct reqsize_data *name = (struct reqsize_data *)data
+#include <reqsize.h>
 
-struct reqsize_data 
-{
-	__u64 min;
-	__u64 max;
-	__u64 total_size;
-	__u64 reqs;
-	struct plugin_set *ps;
-};
-
-void C(struct blk_io_trace *t, void *data) 
+static void C(struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_REQSIZE(rsd,data);
 	
@@ -46,22 +36,24 @@ void reqsize_add(void *data1, const void *data2)
 void reqsize_print_results(const void *data)
 {
 	DECL_ASSIGN_REQSIZE(rsd,data);
-	
-	printf("Reqs. #: %lld min: %lld avg: %f max: %lld (blocks)\n",
-	       rsd->reqs,
-	       rsd->min,
-	       ((double)rsd->total_size)/rsd->reqs,
-	       rsd->max);
+
+	if(rsd->reqs)
+		printf("Reqs. #: %lld min: %lld avg: %f max: %lld (blocks)\n",
+		       rsd->reqs,
+		       rsd->min,
+		       ((double)rsd->total_size)/rsd->reqs,
+		       rsd->max);
 }
 
-void reqsize_init(struct plugin *p, struct plugin_set *ps)
+void reqsize_init(struct plugin *p, struct plugin_set *__unused)
 {
 	struct reqsize_data *req = p->data = g_new(struct reqsize_data,1);
 	req->min = ~0;
 	req->max = 0;
 	req->total_size = 0;
 	req->reqs = 0;
-	req->ps = ps;
+	
+	__unused = NULL; /* to make gcc quite */
 }
 
 void reqsize_ops_init(struct plugin_ops *po)

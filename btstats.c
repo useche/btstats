@@ -218,19 +218,28 @@ void analyze_dev_range(gpointer r_arg, gpointer t_arg)
 void ranges_finish(gpointer r_arg, gpointer t_arg)
 {
 	char head[MAX_HEAD];
+	char end_range[MAX_HEAD];
+	
 	struct time_range *range = (struct time_range *)r_arg;
 	struct trace_ps *tps = (struct trace_ps *)t_arg;
 	
 	/* adding the current plugin set to the global ps */
 	if(tps->gps)
 		plugin_set_add(tps->gps,tps->ps[tps->cur_ps]);
+
+	if(range->end == G_MAXUINT64)
+		sprintf(end_range,"%s","inf");
+	else
+		sprintf(end_range,"%lld.%lld",
+			SECONDS(range->end),
+			NANO_SECONDS(range->end));
 	
-	sprintf(head,"%s [%lld.%lld:%lld.%lld]",
+	sprintf(head,"%s [%lld.%lld:%s]",
 		tps->dev,
 		SECONDS(range->start),
 		NANO_SECONDS(range->start),
-		SECONDS(range->end),
-		NANO_SECONDS(range->end));
+		end_range);
+	
 	
 	plugin_set_print(tps->ps[tps->cur_ps],head);
 	plugin_set_destroy(tps->ps[tps->cur_ps]);	
