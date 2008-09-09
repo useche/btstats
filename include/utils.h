@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 #define MAX_FILE_SIZE 256
-#define HEAD_MAX 256
+#define MAX_HEAD 256
 
 /* perror and exit */
 #define perror_exit(msg)			\
@@ -27,4 +27,10 @@ inline static int comp_int(gconstpointer a,gconstpointer b)
 	int y = (int)b;
 	
 	return x-y;
+}
+
+inline static void free_item(gpointer data, gpointer __unused)
+{
+	__unused = NULL; /* make gcc quite */
+	g_free(data);
 }

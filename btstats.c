@@ -1,7 +1,8 @@
 #include <glib.h>
+#include <glib/gprintf.h>
+#include <string.h>
 #include <stdio.h>
 #include <getopt.h>
-#include <strings.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -46,8 +47,67 @@ void usage_exit()
 		   "\t<device>: String of devices/ranges to analyze.\n");
 }
 
-void parse_file(char *file, struct args *a) 
+void parse_file(char *filename, struct args *a) 
 {
+	char *line = NULL;
+	size_t len;
+	char curdev[MAX_FILE_SIZE];
+	double last_start;
+	
+	int e;
+	FILE *f = fopen(filename,"r");
+	if(!f) perror_exit("Ranges file");
+
+	a->devs_ranges = g_hash_table_new(g_str_hash,g_str_equal);
+	memset(curdev,0,sizeof(curdev));
+	
+	while(getline(&line,&len,f) > 0) {
+		char **no_com = g_strsplit(line,"#",2);
+		no_com[0] = g_strstrip(no_com[0]);
+		
+		if(strlen(no_com[0])!=0) {
+			if(no_com[0][0] == '@') {
+				g_stpcpy(curdev,(no_com[0]+1));
+				last_start = 0;
+			} else {
+				double end;
+				struct time_range *r;
+				GSList *ranges = NULL;
+				char *dev = NULL;
+				gboolean found;
+				
+				if(strlen(curdev)==0)
+					error_exit("Wrong trace name\n");
+				
+				e = sscanf(no_com[0],"%lf",&end);
+				if(!e) error_exit("Wrong range\n");
+				
+				r = g_new0(struct time_range,1);
+				r->start = DOUBLE_TO_NANO_ULL(last_start);
+				r->end = end==-1?G_MAXUINT64:DOUBLE_TO_NANO_ULL(end);
+				
+				dev = curdev;
+				found = g_hash_table_lookup_extended(a->devs_ranges,
+								     dev,
+								     (gpointer *)&dev,
+								     (gpointer *)&ranges);
+				
+				if(!found)
+					dev = g_strdup(curdev);
+				
+				ranges = g_slist_append(ranges,r);
+				g_hash_table_replace(a->devs_ranges,dev,ranges);
+				
+				last_start = end;
+			}
+		}
+		
+		g_strfreev(no_com);
+		free(line);
+		line = NULL;
+	}
+	
+	/* TODO: check for errors in fscanf */
 }
 
 void parse_dev_str(char *devs, struct args *a)
@@ -59,9 +119,11 @@ void parse_dev_str(char *devs, struct args *a)
 	a->devs_ranges = g_hash_table_new(g_str_hash,g_str_equal);
 	
 	for(i=0; raw_dev_range[i]; ++i) {
-		GSList *ranges;
+		GSList *ranges = NULL;
+		gboolean found;
 		struct time_range *r;
 		
+		char *dev = NULL;
 		char **dev_pair = g_strsplit(raw_dev_range[i],"@",2);
 		
 		double d_start = 0;
@@ -69,16 +131,26 @@ void parse_dev_str(char *devs, struct args *a)
 		
 		if(dev_pair[1]) {
 			e = sscanf(dev_pair[1],"%lf:%lf",&d_start,&d_end);
-			if(!e) error_exit("Wrong devices and ranges");
+			if(!e) error_exit("Wrong devices or ranges\n");
 		}
 		
 		r = g_new0(struct time_range,1);
 		r->start = DOUBLE_TO_NANO_ULL(d_start);
 		r->end = d_end==-1?G_MAXUINT64:DOUBLE_TO_NANO_ULL(d_end);
-		
-		ranges = g_hash_table_lookup(a->devs_ranges,dev_pair[0]);
+
+		dev = dev_pair[0];
+		found = g_hash_table_lookup_extended(a->devs_ranges,
+						     dev,
+						     (gpointer *)&dev,
+						     (gpointer *)&ranges);
+
+		if(!found)
+			dev = g_strdup(dev_pair[0]);
+
 		ranges = g_slist_append(ranges,r);
-		g_hash_table_replace(a->devs_ranges,dev_pair[0],ranges);
+		g_hash_table_replace(a->devs_ranges,dev,ranges);
+		
+		g_strfreev(dev_pair);
 	}
 	
 	g_strfreev(raw_dev_range);
@@ -145,7 +217,7 @@ void analyze_dev_range(gpointer r_arg, gpointer t_arg)
 
 void ranges_finish(gpointer r_arg, gpointer t_arg)
 {
-	char head[HEAD_MAX];
+	char head[MAX_HEAD];
 	struct time_range *range = (struct time_range *)r_arg;
 	struct trace_ps *tps = (struct trace_ps *)t_arg;
 	
@@ -199,9 +271,16 @@ void analyze_device(char *dev, GSList *ranges, struct plugin_set *ps)
 	g_slist_foreach(ranges,ranges_finish,&tps);
 }
 
-void analyze_device_hash(gpointer dev, gpointer ranges, gpointer global_plugin) 
+void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer global_plugin) 
 {
+	char *dev = dev_arg;
+	GSList *ranges = ranges_arg;
+	
 	analyze_device(dev,ranges,global_plugin);
+	
+	free(dev);
+	g_slist_foreach(ranges,free_item,NULL);
+	g_slist_free(ranges);
 }
 
 int main(int argc, char **argv) 

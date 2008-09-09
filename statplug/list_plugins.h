@@ -10,7 +10,12 @@ enum {
 };
 struct plug_init_dest_funcs plug_init_dest[] =
 {
-	{reqsize_init, reqsize_destroy, reqsize_ops_init, reqsize_ops_destroy}
+	{
+		.init = reqsize_init, 
+		.destroy = reqsize_destroy, 
+		.ops_init = reqsize_ops_init, 
+		.ops_destroy = reqsize_ops_destroy
+	}
 };
 
 #endif

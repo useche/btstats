@@ -89,6 +89,11 @@ void find_input_traces(struct dev_trace *trace, const char *dev)
 			read_next_trace(tf,0);
 		}
 	}
+	
+	if(g_slist_length(trace->files)==0) {
+		printf("%s; %s\n",dev,pre_dev_trace);
+		error_exit("No such traces\n");
+	}
 
 	g_slist_foreach(trace->files,min_time,&min);
 	trace->genesis = min->t.time;
