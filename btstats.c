@@ -247,6 +247,17 @@ void ranges_finish(gpointer r_arg, gpointer t_arg)
 	tps->cur_ps++;
 }
 
+void max_end(gpointer range_a, gpointer max_a) 
+{
+	struct time_range *r = (struct time_range *)range_a;
+	struct time_range **max = (struct time_range **)max_a;
+	
+	if(*max == NULL)
+		*max = r;
+	else
+		*max = r->end>(*max)->end?r:*max;
+}
+
 void analyze_device(char *dev, GSList *ranges, struct plugin_set *ps) 
 {
 	int i;
@@ -255,14 +266,20 @@ void analyze_device(char *dev, GSList *ranges, struct plugin_set *ps)
 	int nrange = g_slist_length(ranges);
 	struct plugin_set *r_ps[nrange];
 	struct trace_ps tps;
+	struct time_range *max = NULL;
 	
 	/* init all plugin sets */
 	for(i = 0; i < nrange; ++i)
 		r_ps[i] = plugin_set_create();
 	
+	g_slist_foreach(ranges,max_end,&max);
+	
 	/* read and collect stats */
 	dt = dev_trace_create(dev);
 	while(dev_trace_read_next(dt,&t)) {
+
+		if(t.time > max->end) break;
+		
 		tps.trace = &t;
 		tps.ps = r_ps;
 		tps.cur_ps = 0;

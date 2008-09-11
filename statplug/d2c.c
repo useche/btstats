@@ -82,19 +82,23 @@ static void __account_reqs(struct d2c_data *d2c)
 			d2c->n_d2cio += d2c->processed;
 			
 			/* account per block */
-			d2c->n_d2cblk += d2c->processed_blks;			
+			d2c->n_d2cblk += d2c->processed_blks;
+
+			/* re-initialize accounters */
+			d2c->processed = 0;
+			d2c->processed_blks = 0;
+			
+			/* empty arrays */
+			g_array_remove_range(d2c->dtimes,
+					     0,
+					     d2c->dtimes->len);
+			g_array_remove_range(d2c->ctimes,
+					     0,
+					     d2c->ctimes->len);
 		}
 		
-		d2c->processed = 0;
-		d2c->processed_blks = 0;
-		
-		/* empty arrays */
-		g_array_remove_range(d2c->dtimes,
-				     0,
-				     d2c->dtimes->len);
-		g_array_remove_range(d2c->ctimes,
-				     0,
-				     d2c->ctimes->len);
+		assert(d2c->processed == 0 && d2c->processed_blks == 0);
+		assert(d2c->dtimes->len == 0 && d2c->ctimes->len == 0);
 	}
 }
 
