@@ -52,7 +52,7 @@ void parse_file(char *filename, struct args *a)
 	char *line = NULL;
 	size_t len;
 	char curdev[MAX_FILE_SIZE];
-	double last_start;
+	double last_start = -1;
 	
 	int e;
 	FILE *f = fopen(filename,"r");

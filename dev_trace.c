@@ -57,7 +57,7 @@ void read_next_trace(struct trace_file *tf, __u64 genesis)
 
 		if(tf->t.pdu_len) {
 			char pdu_buf[tf->t.pdu_len];
-			read(tf->fd,pdu_buf,tf->t.pdu_len);
+			e = read(tf->fd,pdu_buf,tf->t.pdu_len);
 			if(e==-1) perror_exit("Reading trace pdu");
 		}
 	}

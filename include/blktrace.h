@@ -16,7 +16,7 @@
 #define NANO_SECONDS(x)		((unsigned long long)(x) % 1000000000)
 #define DOUBLE_TO_NANO_ULL(d)	((unsigned long long)((d) * 1000000000))
 
-#define t_sec(t)	((t)->bytes >> 9)
+#define t_blks(t)	((t)->bytes >> 9)
 #define t_kb(t)		((t)->bytes >> 10)
 
 #define CHECK_MAGIC(t)		(((t)->magic & 0xffffff00) == BLK_IO_TRACE_MAGIC)

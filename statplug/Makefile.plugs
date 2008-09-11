@@ -1,2 +1,5 @@
-PLUGS=statplug/reqsize.o statplug/seek.o statplug/d2c.o
-PLUG_SRCS=statplug/reqsize.c statplug/seek.c statplug/d2c.c
+PLUGS=statplug/plugins.o
+PLUG_SRCS=statplug/plugins.c
+
+PLUGS+=statplug/reqsize.o statplug/seek.o statplug/d2c.o
+PLUG_SRCS+=statplug/reqsize.c statplug/seek.c statplug/d2c.c

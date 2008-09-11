@@ -1,24 +1,29 @@
 APP=btstats
+APP_O=$(APP).o
 
 include statplug/Makefile.plugs
 
-DEV_TRACE=dev_trace.o
-APP_DEP=$(APP).o $(PLUGS) statplug/plugins.o $(DEV_TRACE)
-
-SRCS=dev_trace.c statplug/plugins.c $(APP).c $(PLUG_SRCS)
+APP_DEP=$(APP).o $(PLUGS) dev_trace.o
+SRCS=$(APP).c $(PLUG_SRCS) dev_trace.c
 
 INCLUDE=`pkg-config --cflags glib-2.0` -I. -Istatplug/ -Iinclude/
-CFLAGS=-Wall -Wextra  -std=c99 $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
+CFLAGS=-Wall -Wextra -O2 -std=c99 $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 LDFLAGS=`pkg-config --libs glib-2.0`
 CC=gcc
 
-#TODO depend to be added
-$(APP): $(APP_DEP)
-	$(CC) $(LDFLAGS) $(APP_DEP) -o $(APP)
+all: depend $(APP)
 
-depend:
-	makedepend -- $(CFLAGS) -- $(SRCS)
+$(APP): | depend
+
+$(APP): $(APP_DEP)
+	$(CC) $(LDFLAGS) $(APP_DEP) -o $@
 
 clean:
-	rm -rf $(APP) $(APP_DEP)
+	rm -rf $(APP) $(APP_DEP) .depend
 
+depend:
+	@$(CC) -M $(CFLAGS) $(SRCS) 1> .depend
+
+ifneq ($(wildcard .depend),)
+include .depend
+endif

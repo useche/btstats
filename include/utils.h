@@ -21,9 +21,6 @@
 		exit(EXIT_FAILURE);		\
 	} while(0)
 
-#define BLK_SHIFT 9
-#define BYTES_TO_BLKS(byts) ((byts)>>BLK_SHIFT)
-
 #define DECL_DUP(type,name,src)			\
 	type *name = g_new(type,1);		\
 	memcpy(name,src,sizeof(type));		\
@@ -41,14 +38,11 @@ inline static int comp_int64(gconstpointer a,gconstpointer b)
 {
 	__u64 x = *((__u64 *)a);
 	__u64 y = *((__u64 *)b);
-	__u64 z;
 	
-	z = x-y;
-	
-	if(z)
-		return z>0?1:-1;
+	if(x==y)
+		return 0;		
 	else
-		return 0;
+		return x>y?1:-1;		
 }
 
 inline static void free_item(gpointer data, gpointer __unused)

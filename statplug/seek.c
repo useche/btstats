@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include <blktrace_api.h>
+#include <blktrace.h>
 #include <plugins.h>
 #include <utils.h>
 #include <list_plugins.h>
@@ -26,7 +27,7 @@ static void C(struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_SEEK(seek,data);
 	
-	__u64 blks = BYTES_TO_BLKS(t->bytes);
+	__u64 blks = t_blks(t);
 	
 	if(seek->lastpos > 0) {
 		if((__u64)seek->lastpos != t->sector) {
