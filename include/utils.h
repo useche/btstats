@@ -44,9 +44,3 @@ inline static int comp_int64(gconstpointer a,gconstpointer b)
 	else
 		return x>y?1:-1;		
 }
-
-inline static void free_item(gpointer data, gpointer __unused)
-{
-	__unused = NULL; /* make gcc quite */
-	g_free(data);
-}
