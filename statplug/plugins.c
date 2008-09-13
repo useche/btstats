@@ -54,9 +54,9 @@ void plugin_set_add_trace(struct plugin_set *ps, const struct blk_io_trace *t)
 	event_func_t event_handler;
 	struct plugin *p;
 	
+	act = t->action & 0xffff;
 	for(i = 0; i < N_PLUGINS; ++i) {
 		p = &ps->plugs[i];
-		act = t->action & 0xffff;
 		event_handler = g_tree_lookup(p->ops->event_tree,(gpointer)act);
 		if(event_handler)
 			event_handler(t,p->data);

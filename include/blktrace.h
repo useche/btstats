@@ -15,6 +15,7 @@
 #define SECONDS(x) 		((unsigned long long)(x) / 1000000000)
 #define NANO_SECONDS(x)		((unsigned long long)(x) % 1000000000)
 #define DOUBLE_TO_NANO_ULL(d)	((unsigned long long)((d) * 1000000000))
+#define NANO_ULL_TO_DOUBLE(x)   (((double)(x))/1000000000)
 
 #define t_blks(t)	((t)->bytes >> 9)
 #define t_kb(t)		((t)->bytes >> 10)

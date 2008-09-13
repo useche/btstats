@@ -199,14 +199,11 @@ void range_finish(struct time_range *range,
 	if(range->end == G_MAXUINT64)
 		sprintf(end_range,"%s","inf");
 	else
-		sprintf(end_range,"%lld.%lld",
-			SECONDS(range->end),
-			NANO_SECONDS(range->end));
+		sprintf(end_range,"%.4f",NANO_ULL_TO_DOUBLE(range->end));
 	
-	sprintf(head,"%s[%lld.%lld:%s]",
+	sprintf(head,"%s[%.4f:%s]",
 		dev,
-		SECONDS(range->start),
-		NANO_SECONDS(range->start),
+		NANO_ULL_TO_DOUBLE(range->start),
 		end_range);
 	
 	
