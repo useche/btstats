@@ -43,24 +43,28 @@ void correct_time(gpointer data, gpointer dt_arg)
 void read_next_trace(struct trace_file *tf, __u64 genesis)
 {
 	int e;
-	
-	e = read(tf->fd,&tf->t,sizeof(struct blk_io_trace));
-	if(e==-1)
-		perror_exit("Reading trace");
-	else if(e==0)
-		tf->eof = TRUE;
-	else {
-		assert(e==sizeof(struct blk_io_trace));
 
-		/* updating to relative time right away */
-		tf->t.time -= genesis;
+	do {
 
-		if(tf->t.pdu_len) {
-			char pdu_buf[tf->t.pdu_len];
-			e = read(tf->fd,pdu_buf,tf->t.pdu_len);
-			if(e==-1) perror_exit("Reading trace pdu");
+		e = read(tf->fd,&tf->t,sizeof(struct blk_io_trace));
+		if(e==-1) 
+			perror_exit("Reading trace");
+		else if(e==0)
+			tf->eof = TRUE;
+		else {
+			assert(e==sizeof(struct blk_io_trace));
+			
+			/* updating to relative time right away */
+			tf->t.time -= genesis;
+			
+			if(tf->t.pdu_len) {
+				char pdu_buf[tf->t.pdu_len];
+				e = read(tf->fd,pdu_buf,tf->t.pdu_len);
+				if(e==-1) perror_exit("Reading trace pdu");
+			}
 		}
-	}
+
+	} while(tf->t.action & BLK_TC_ACT(BLK_TC_NOTIFY) && tf->t.action != BLK_TN_MESSAGE);
 }
 
 void find_input_traces(struct dev_trace *trace, const char *dev)
