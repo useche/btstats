@@ -16,7 +16,8 @@ struct time_range
 {
 	__u64 start;
 	__u64 end;
-	gboolean done;
+
+	struct plugin_set *ps; /* used in analysis */
 };
 
 struct args
@@ -69,7 +70,6 @@ void parse_file(char *filename, struct args *a)
 				
 				r.start = DOUBLE_TO_NANO_ULL(last_start);
 				r.end = end==-1?G_MAXUINT64:DOUBLE_TO_NANO_ULL(end);
-				r.done = FALSE;
 				
 				dev = curdev;
 				ranges = g_hash_table_lookup(a->devs_ranges, dev);
@@ -117,7 +117,6 @@ void parse_dev_str(char *devs, struct args *a)
 		
 		r.start = DOUBLE_TO_NANO_ULL(d_start);
 		r.end = d_end==-1?G_MAXUINT64:DOUBLE_TO_NANO_ULL(d_end);
-		r.done = FALSE;
 
 		dev = dev_pair[0];
 		ranges = g_hash_table_lookup(a->devs_ranges,dev);
@@ -213,39 +212,37 @@ void range_finish(struct time_range *range,
 
 void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps) 
 {
-	int i;
+	unsigned i;
 	struct blk_io_trace t;
 	struct dev_trace *dt;
-	int todo, nrange = ranges->len;
-	struct plugin_set *r_ps[nrange];
 	
 	/* init all plugin sets */
-	for(i = 0; i < nrange; ++i)
-		r_ps[i] = plugin_set_create();
+	for(i = 0; i < ranges->len; ++i)
+		g_array_index(ranges,struct time_range,i).ps = plugin_set_create();
 	
 	/* read and collect stats */
-	todo = nrange;
 	dt = dev_trace_create(dev);
 	while(dev_trace_read_next(dt,&t)) {
-		for(i = 0; i < nrange; ++i) {
+		i = 0;
+		while(i < ranges->len) {
 			struct time_range *r = &g_array_index(ranges,struct time_range,i);
 			
-			if(!r->done) {
-				if(t.time > r->end) {
-					r->done = TRUE;
-					todo--;
-				} else if(r->start <= t.time) {
-					plugin_set_add_trace(r_ps[i],&t);
-				}
+			if(t.time > r->end) {
+				range_finish(r,ps,r->ps,dev);
+				g_array_remove_index_fast(ranges,i);
+			} else {
+				if(r->start <= t.time)
+					plugin_set_add_trace(r->ps,&t);
+				
+				i++;
 			}
 		}
-		
-		if(todo == 0) break;
 	}
-	
-	for(i = 0; i < nrange; ++i) {
+
+	/* finish the ps which ranges are beyond the end */
+	for(i = 0; i < ranges->len; ++i) {
 		struct time_range *r = &g_array_index(ranges,struct time_range,i);
-		range_finish(r,ps,r_ps[i],dev);
+		range_finish(r,ps,r->ps,dev);
 	}
 }
 

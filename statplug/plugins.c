@@ -42,7 +42,7 @@ void plugin_set_print(const struct plugin_set *ps, const char *head)
 {
 	int i;
 	
-	printf("%s ==============================\n",head);
+	printf("%s\t=====================================\n",head);
 	for(i = 0; i < N_PLUGINS; ++i)
 		ps->plugs[i].ops->print_results(ps->plugs[i].data);
 }
