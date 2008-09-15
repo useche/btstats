@@ -1,5 +1,5 @@
 PLUGS=statplug/plugins.o
 PLUG_SRCS=statplug/plugins.c
 
-PLUGS+=statplug/reqsize.o statplug/seek.o statplug/d2c.o
-PLUG_SRCS+=statplug/reqsize.c statplug/seek.c statplug/d2c.c
+PLUGS+=statplug/reqsize.o statplug/seek.o statplug/d2c.o statplug/merge.o statplug/pluging.o
+PLUG_SRCS+=statplug/reqsize.c statplug/seek.c statplug/d2c.c statplug/merge.c statplug/pluging.c

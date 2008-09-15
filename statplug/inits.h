@@ -23,4 +23,14 @@ void d2c_init(struct plugin *p, struct plugin_set *ps);
 void d2c_destroy(struct plugin *p);
 void d2c_ops_init(struct plugin_ops *po);
 
+/* merge inits and destroyers */
+void merge_init(struct plugin *p, struct plugin_set *ps);
+void merge_destroy(struct plugin *p);
+void merge_ops_init(struct plugin_ops *po);
+
+/* pluging inits and destroyers */
+void pluging_init(struct plugin *p, struct plugin_set *ps);
+void pluging_destroy(struct plugin *p);
+void pluging_ops_init(struct plugin_ops *po);
+
 #endif
