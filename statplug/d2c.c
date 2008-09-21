@@ -196,13 +196,14 @@ void d2c_print_results(const void *data)
 	
 	if(d2c->n_d2cio > 0) {
 		double t_time_msec = ((double)d2c->d2ctime)/1000000;
+		double t_req_mb = ((double)d2c->req_dat->total_size)/(1<<11);
 
 		printf("Avg. D2C per I/O: %f (msec)\n",
 		       t_time_msec/(d2c->n_d2cio));
 		printf("Avg. D2C per block: %f (msec)\n",
 		       t_time_msec/(d2c->n_d2cblk));
 		printf("Avg. D2C Throughput: %f (MB/sec)\n",
-		       ((d2c->req_dat->total_size)>>11)/(t_time_msec/1000));
+		       (t_req_mb)/(t_time_msec/1000));
 		printf("Max outstanding: %u (reqs)\n",
 		       d2c->maxouts);
 	}

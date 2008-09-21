@@ -79,6 +79,12 @@ void correct_time(gpointer data, gpointer dt_arg)
 	tf->t.time -= dt->genesis;
 }
 
+gboolean not_real_event(struct blk_io_trace *t)
+{
+	return t->action & BLK_TC_ACT(BLK_TC_NOTIFY) && 
+		t->action != BLK_TN_MESSAGE;
+}
+
 void read_next_trace(struct trace_file *tf, __u64 genesis)
 {
 	int e;
@@ -103,7 +109,7 @@ void read_next_trace(struct trace_file *tf, __u64 genesis)
 			}
 		}
 
-	} while(tf->t.action & BLK_TC_ACT(BLK_TC_NOTIFY) && tf->t.action != BLK_TN_MESSAGE);
+	} while(not_real_event(&tf->t));
 }
 
 void find_input_traces(struct dev_trace *trace, const char *dev)
@@ -156,11 +162,11 @@ struct dev_trace *dev_trace_create(const char *dev)
 
 void free_data(gpointer data, gpointer __unused) 
 {
+	__unused = NULL; /* make gcc quite */
+
 	struct trace_file *tf = (struct trace_file *)data;
 	close(tf->fd);
 	g_free(tf);
-
-	tf = __unused; /* useless. Just to make gcc quite */
 }
 
 void dev_trace_destroy(struct dev_trace *dt) 

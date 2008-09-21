@@ -261,7 +261,7 @@ void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps)
 	
 	/* read and collect stats */
 	dt = dev_trace_create(dev);
-	while(dev_trace_read_next(dt,&t)) {
+	while(dev_trace_read_next(dt,&t) && ranges->len > 0) {
 		i = 0;
 		while(i < ranges->len) {
 			struct time_range *r = &g_array_index(ranges,struct time_range,i);
@@ -278,7 +278,7 @@ void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps)
 		}
 	}
 
-	/* finish the ps which ranges are beyond the end */
+	/* finish the ps which range is beyond the end */
 	for(i = 0; i < ranges->len; ++i) {
 		struct time_range *r = &g_array_index(ranges,struct time_range,i);
 		range_finish(r,ps,r->ps,dev);
