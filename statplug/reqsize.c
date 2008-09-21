@@ -78,7 +78,7 @@ void reqsize_print_results(const void *data)
 	DECL_ASSIGN_REQSIZE(rsd,data);
 
 	if(rsd->reqs)
-		printf("Reqs. #: %lld min: %lld avg: %f max: %lld (blocks)\n",
+		printf("Reqs. #: %lld min: %lld avg: %f max: %lld (blks)\n",
 		       rsd->reqs,
 		       rsd->min,
 		       ((double)rsd->total_size)/rsd->reqs,

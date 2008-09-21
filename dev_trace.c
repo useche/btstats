@@ -55,6 +55,18 @@
 #include <blktrace.h>
 #include <blktrace_api.h>
 
+#define CORRECT_ENDIAN(v)					\
+	do {							\
+		if(sizeof(v) == sizeof(__u32))			\
+			v = be32_to_cpu(v);			\
+		else if(sizeof(v) == sizeof(__u64))		\
+			v = be64_to_cpu(v);			\
+		else						\
+			error_exit("Wrong endian conversion");	\
+	} while(0)
+
+static int native_trace = -1;
+
 void min_time(gpointer data, gpointer min)
 {
 	struct trace_file *tf = (struct trace_file *)data;
@@ -81,8 +93,7 @@ void correct_time(gpointer data, gpointer dt_arg)
 
 gboolean not_real_event(struct blk_io_trace *t)
 {
-	return t->action & BLK_TC_ACT(BLK_TC_NOTIFY) && 
-		t->action != BLK_TN_MESSAGE;
+	return t->action & BLK_TC_ACT(BLK_TC_NOTIFY);
 }
 
 void read_next_trace(struct trace_file *tf, __u64 genesis)
@@ -93,11 +104,34 @@ void read_next_trace(struct trace_file *tf, __u64 genesis)
 
 		e = read(tf->fd,&tf->t,sizeof(struct blk_io_trace));
 		if(e==-1) 
-			perror_exit("Reading trace");
+			perror_exit("Reading trace\n");
 		else if(e==0)
 			tf->eof = TRUE;
 		else {
-			assert(e==sizeof(struct blk_io_trace));
+			if(e!=sizeof(struct blk_io_trace))
+				error_exit("Reading trace\n");
+
+			/* verify trace and check endianess */
+			if(native_trace<0)
+				native_trace = check_data_endianness(tf->t.magic);
+			
+			assert(native_trace>=0);
+			if(!native_trace) {
+				CORRECT_ENDIAN(tf->t.magic);
+				CORRECT_ENDIAN(tf->t.sequence);
+				CORRECT_ENDIAN(tf->t.time);
+				CORRECT_ENDIAN(tf->t.sector);
+				CORRECT_ENDIAN(tf->t.bytes);
+				CORRECT_ENDIAN(tf->t.action);
+				CORRECT_ENDIAN(tf->t.pid);
+				CORRECT_ENDIAN(tf->t.device);
+				CORRECT_ENDIAN(tf->t.cpu);
+				CORRECT_ENDIAN(tf->t.error);
+				CORRECT_ENDIAN(tf->t.pdu_len);
+			}
+			
+			if(verify_trace(&tf->t))
+				error_exit("Bad trace!\n");
 			
 			/* updating to relative time right away */
 			tf->t.time -= genesis;

@@ -99,7 +99,7 @@ void seek_print_results(const void *data)
 	if(seek->seeks) {
 		printf("Seq.: %.2f%%\n",
 		       (1-(((double)seek->seeks)/seek->req_dat->total_size))*100);
-		printf("Seeks #: %llu min: %llu avg: %f max: %llu\n",
+		printf("Seeks #: %llu min: %llu avg: %f max: %llu (blks)\n",
 		       seek->seeks,
 		       seek->min,
 		       ((double)seek->total)/seek->seeks,
