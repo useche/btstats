@@ -49,7 +49,8 @@ enum {
 	REQ_SIZE_IND = 0,
 	SEEK_IND,
 	D2C_IND,
-	MERGE_IND
+	MERGE_IND,
+	PLUGING_IND
 };
 static const struct plug_init_dest_funcs plug_init_dest[] =
 {

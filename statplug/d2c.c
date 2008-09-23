@@ -61,8 +61,6 @@ struct d2c_data
 	GArray *ctimes;
 
 	__u64 d2ctime;
-	__u64 n_d2cio;
-	__u64 n_d2cblk;
 
 	__u32 maxouts;
 	
@@ -116,12 +114,6 @@ static void __account_reqs(struct d2c_data *d2c)
 
 			/* adding total time */
 			d2c->d2ctime += end - start;
-
-			/* accounting per request */
-			d2c->n_d2cio += d2c->processed;
-			
-			/* account per block */
-			d2c->n_d2cblk += d2c->processed_blks;
 
 			/* re-initialize accounters */
 			d2c->processed = 0;
@@ -186,22 +178,20 @@ void d2c_add(void *data1, const void *data2)
 	DECL_ASSIGN_D2C(d2c2,data2);
 	
 	d2c1->d2ctime += d2c2->d2ctime;
-	d2c1->n_d2cio += d2c2->n_d2cio;
-	d2c1->n_d2cblk += d2c2->n_d2cblk;
 }
 
 void d2c_print_results(const void *data)
 {
 	DECL_ASSIGN_D2C(d2c,data);
 	
-	if(d2c->n_d2cio > 0) {
+	if(d2c->req_dat->reqs > 0) {
 		double t_time_msec = ((double)d2c->d2ctime)/1000000;
 		double t_req_mb = ((double)d2c->req_dat->total_size)/(1<<11);
 
 		printf("Avg. D2C per I/O: %f (msec)\n",
-		       t_time_msec/(d2c->n_d2cio));
+		       t_time_msec/(d2c->req_dat->reqs));
 		printf("Avg. D2C per block: %f (msec)\n",
-		       t_time_msec/(d2c->n_d2cblk));
+		       t_time_msec/(d2c->req_dat->total_size));
 		printf("Avg. D2C Throughput: %f (MB/sec)\n",
 		       (t_req_mb)/(t_time_msec/1000));
 		printf("Max outstanding: %u (reqs)\n",
@@ -214,7 +204,7 @@ void d2c_init(struct plugin *p, struct plugin_set *ps)
 	struct d2c_data *d2c = p->data = g_new(struct d2c_data,1);
 
 	d2c->outstanding = d2c->processed = d2c->processed_blks = 0;
-	d2c->d2ctime = d2c->n_d2cio = d2c->n_d2cblk = d2c->maxouts = 0;
+	d2c->d2ctime = d2c->maxouts = 0;
 
 	d2c->prospect_ds = g_tree_new(comp_int64);
 	d2c->dtimes = g_array_sized_new(FALSE,FALSE,sizeof(__u64),TENT_OUTS_RQS);
