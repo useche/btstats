@@ -47,8 +47,8 @@
 typedef void (*event_func_t)(const struct blk_io_trace *, void *);
 struct plugin_ops 
 {
-	/* hash table to find, given the event int,
-	   the function to call */
+	/* hash table with key = int of event,
+	   value = the function to call */
 	GTree *event_tree;
 
 	/* additional functions */
@@ -72,10 +72,17 @@ struct plugin_set
 	int n;
 };
 
+struct plug_args
+{
+	char *d2c_file_detail;
+};
+
 struct plug_init_dest_funcs
 {
 	/* init, destroy */
-	void (*init)(struct plugin *p, struct plugin_set *ps);
+	void (*init)(struct plugin *p,
+		struct plugin_set *ps,
+		struct plug_args *pia);
 	void (*destroy)(struct plugin *p);
 	void (*ops_init)(struct plugin_ops *po);
 	void (*ops_destroy)(struct plugin_ops *po);
@@ -84,7 +91,8 @@ struct plug_init_dest_funcs
 void init_plugs_ops();
 void destroy_plugs_ops();
 
-struct plugin_set *plugin_set_create();
+/* plugin set methods */
+struct plugin_set *plugin_set_create(struct plug_args *pia);
 void plugin_set_destroy(struct plugin_set *ps);
 void plugin_set_print(const struct plugin_set *ps, const char *head);
 void plugin_set_add_trace(struct plugin_set *ps, const struct blk_io_trace *t);

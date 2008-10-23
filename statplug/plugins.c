@@ -48,7 +48,7 @@
 /* array of operations and function initializer */
 struct plugin_ops ps_ops[N_PLUGINS];
 
-struct plugin_set *plugin_set_create()
+struct plugin_set *plugin_set_create(struct plug_args *pia)
 {
 	int i;
 	
@@ -58,7 +58,7 @@ struct plugin_set *plugin_set_create()
 	
 	/* create and initilize a new set of plugins */
 	for(i = 0; i < N_PLUGINS; ++i) {
-		plug_init_dest[i].init(&tmp->plugs[i], tmp);
+		plug_init_dest[i].init(&tmp->plugs[i], tmp, pia);
 		tmp->plugs[i].ops = &ps_ops[i];
 	}
 	

@@ -38,6 +38,7 @@
  */
 
 #include <assert.h>
+#include <stdio.h>
 
 #include <plugins.h>
 #include <blktrace_api.h>
@@ -65,6 +66,8 @@ struct d2c_data
 	__u32 maxouts;
 	
 	struct reqsize_data *req_dat;
+
+	FILE *detail_f;
 };
 
 static void D(struct blk_io_trace *t, void *data)
@@ -142,8 +145,19 @@ static void C(struct blk_io_trace *t, void *data)
 	
 	if(blks && dtrace) {
 		if(dtrace->bytes == t->bytes) {
+			int e;
+
 			d2c->processed++;
 			d2c->processed_blks += blks;
+			
+			/* add detail to file @detail_f */
+			if(d2c->detail_f) {
+				e = fprintf(d2c->detail_f,"%llu %llu %f\n",
+					t->sector,
+					blks,
+					NANO_ULL_TO_DOUBLE(t->time - dtrace->time));
+				if(e < 0) error_exit("Error writing D2C detail file\n");
+			}
 			
 			g_array_append_val(d2c->dtimes,dtrace->time);
 			g_array_append_val(d2c->ctimes,t->time);
@@ -184,7 +198,7 @@ void d2c_print_results(const void *data)
 {
 	DECL_ASSIGN_D2C(d2c,data);
 	
-	if(d2c->req_dat->reqs > 0) {
+	if(d2c->d2ctime > 0) {
 		double t_time_msec = ((double)d2c->d2ctime)/1000000;
 		double t_req_mb = ((double)d2c->req_dat->total_size)/(1<<11);
 
@@ -196,10 +210,11 @@ void d2c_print_results(const void *data)
 		       (t_req_mb)/(t_time_msec/1000));
 		printf("Max outstanding: %u (reqs)\n",
 		       d2c->maxouts);
-	}
+	} else
+		printf("Not enough data for D2C stats\n");
 }
 
-void d2c_init(struct plugin *p, struct plugin_set *ps)
+void d2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *pia)
 {
 	struct d2c_data *d2c = p->data = g_new(struct d2c_data,1);
 
@@ -210,6 +225,12 @@ void d2c_init(struct plugin *p, struct plugin_set *ps)
 	d2c->dtimes = g_array_sized_new(FALSE,FALSE,sizeof(__u64),TENT_OUTS_RQS);
 	d2c->ctimes = g_array_sized_new(FALSE,FALSE,sizeof(__u64),TENT_OUTS_RQS);
 	d2c->req_dat = ps->plugs[REQ_SIZE_IND].data;
+	
+	if(pia->d2c_file_detail) {
+		d2c->detail_f = fopen(pia->d2c_file_detail,"a");
+		if(!d2c->detail_f) perror_exit("D2C detail file"); 
+	} else
+		d2c->detail_f = NULL;
 }
 
 void d2c_destroy(struct plugin *p)
@@ -220,6 +241,9 @@ void d2c_destroy(struct plugin *p)
 	g_array_free(d2c->dtimes,FALSE);
 	g_array_free(d2c->ctimes,FALSE);
 	g_free(p->data);
+
+	if(d2c->detail_f)
+		fclose(d2c->detail_f);
 }
 
 void d2c_ops_init(struct plugin_ops *po)

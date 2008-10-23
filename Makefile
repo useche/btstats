@@ -38,7 +38,9 @@
 APP=btstats
 APP_O=$(APP).o
 
-include statplug/Makefile.plugs
+# All .c files in statplug directory are considered plugins.
+PLUGS = $(patsubst %.c,%.o,$(wildcard statplug/*.c))
+PLUG_SRCS = $(wildcard statplug/*.c)
 
 APP_DEP=$(APP).o $(PLUGS) dev_trace.o
 SRCS=$(APP).c $(PLUG_SRCS) dev_trace.c

@@ -107,7 +107,7 @@ void seek_print_results(const void *data)
 	}
 }
 
-void seek_init(struct plugin *p, struct plugin_set *ps)
+void seek_init(struct plugin *p, struct plugin_set *ps, struct plug_args *__un)
 {
 	struct seek_data *seek = p->data = g_new0(struct seek_data,1);
 	seek->lastpos = -1;
@@ -116,6 +116,8 @@ void seek_init(struct plugin *p, struct plugin_set *ps)
 	seek->total = 0;
 	seek->seeks = 0;
 	seek->req_dat = (struct reqsize_data *)ps->plugs[REQ_SIZE_IND].data;
+
+	__un = NULL;
 }
 
 void seek_destroy(struct plugin *p)

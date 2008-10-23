@@ -105,9 +105,10 @@ void read_next_trace(struct trace_file *tf, __u64 genesis)
 		e = read(tf->fd,&tf->t,sizeof(struct blk_io_trace));
 		if(e==-1) 
 			perror_exit("Reading trace\n");
-		else if(e==0)
+		else if(e==0) {
 			tf->eof = TRUE;
-		else {
+			break;
+		} else {
 			if(e!=sizeof(struct blk_io_trace))
 				error_exit("Reading trace\n");
 

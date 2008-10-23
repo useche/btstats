@@ -110,7 +110,7 @@ void pluging_print_results(const void *data)
 		printf("No plugging in this range\n");
 }
 
-void pluging_init(struct plugin *p, struct plugin_set *__unused)
+void pluging_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un2)
 {
 	struct pluging_data *plug = p->data = g_new(struct pluging_data,1);
 	
@@ -120,7 +120,7 @@ void pluging_init(struct plugin *p, struct plugin_set *__unused)
 	plug->nplugs = 0;
 	plug->plug_time = 0;
 	
-	__unused = NULL;
+	__un1 = NULL; __un2 = NULL;
 }
 
 void pluging_ops_init(struct plugin_ops *po)

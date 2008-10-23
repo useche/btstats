@@ -63,13 +63,21 @@ struct args
 {
 	GHashTable *devs_ranges;
 	gboolean total;
+	struct plug_args pa;
+};
+
+struct analyze_args
+{
+	struct plugin_set *ps;
+	struct plug_args *pa;
 };
 
 void usage_exit() 
 {
-	error_exit("btstats [-f <file>] [-t] [<device>]\n\n"
+	error_exit("btstats [-f <file>] [-t] [-d <file>] [<device>]\n\n"
 		   "\t-f: File which list the traces and phases to analyze.\n"
 		   "\t-t: Print the total stats for all traces.\n"
+		   "\t-d: File where all the details of D2C will be stored.\n"
 		   "\t<device>: String of devices/ranges to analyze.\n");
 }
 
@@ -180,19 +188,20 @@ void handle_args(int argc, char **argv, struct args *a)
 	char *device = NULL;
 	char *file = NULL;
 
-	bzero(a,sizeof(struct args));
+	memset(a,0,sizeof(struct args));
 
 	while (1) {
 		int option_index = 0;
 		static struct option long_options[] =
 			{
-				{"file", required_argument, 0,	 'f'},
-				{"total",  no_argument, 0,	 't'},
-				{"help",  no_argument, 0,	 'h'},
+				{"file",	required_argument,	0, 'f'},
+				{"total",	no_argument,		0, 't'},
+				{"help",	no_argument,		0, 'h'},
+				{"d2c-detail",	required_argument,	0, 'd'},
 				{0,0,0,0}
 			};		
 		
-		c = getopt_long(argc, argv, "f:th", long_options, &option_index);
+		c = getopt_long(argc, argv, "f:thd:", long_options, &option_index);
 		
 		if (c == -1) break;
 		
@@ -202,6 +211,9 @@ void handle_args(int argc, char **argv, struct args *a)
 			break;
 		case 't':
 			a->total = TRUE;
+			break;
+		case 'd':
+			a->pa.d2c_file_detail = optarg;
 			break;
 		default:
 			usage_exit();
@@ -249,7 +261,7 @@ void range_finish(struct time_range *range,
 	plugin_set_destroy(ps);	
 }
 
-void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps) 
+void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps, struct plug_args *pa) 
 {
 	unsigned i;
 	struct blk_io_trace t;
@@ -257,7 +269,7 @@ void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps)
 	
 	/* init all plugin sets */
 	for(i = 0; i < ranges->len; ++i)
-		g_array_index(ranges,struct time_range,i).ps = plugin_set_create();
+		g_array_index(ranges,struct time_range,i).ps = plugin_set_create(pa);
 	
 	/* read and collect stats */
 	dt = dev_trace_create(dev);
@@ -285,12 +297,14 @@ void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps)
 	}
 }
 
-void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer global_plugin) 
+void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer ar) 
 {
 	char *dev = dev_arg;
 	GArray *ranges = ranges_arg;
+	struct plugin_set *global_plugin = ((struct analyze_args *)ar)->ps;
+	struct plug_args *pa = ((struct analyze_args *)ar)->pa;
 	
-	analyze_device(dev,ranges,global_plugin);
+	analyze_device(dev,ranges,global_plugin,pa);
 	
 	free(dev);
 	g_array_free(ranges,TRUE);
@@ -300,6 +314,7 @@ int main(int argc, char **argv)
 {
 	struct args a;
 	
+	struct analyze_args ar;
 	struct plugin_set *global_plugin = NULL;
 	
 	handle_args(argc,argv,&a);
@@ -307,10 +322,12 @@ int main(int argc, char **argv)
 	init_plugs_ops();	
 	
 	if(a.total)
-		global_plugin = plugin_set_create();	
+		global_plugin = plugin_set_create(NULL);
 
 	/* analyze each device with its ranges */
-	g_hash_table_foreach(a.devs_ranges,analyze_device_hash,global_plugin);
+	ar.ps = global_plugin;
+	ar.pa = &a.pa;
+	g_hash_table_foreach(a.devs_ranges,analyze_device_hash,&ar);
 	
 	if(a.total) {
 		plugin_set_print(global_plugin,"All");

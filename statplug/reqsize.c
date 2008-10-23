@@ -85,7 +85,7 @@ void reqsize_print_results(const void *data)
 		       rsd->max);
 }
 
-void reqsize_init(struct plugin *p, struct plugin_set *__unused)
+void reqsize_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un2)
 {
 	struct reqsize_data *req = p->data = g_new(struct reqsize_data,1);
 	req->min = ~0;
@@ -93,7 +93,7 @@ void reqsize_init(struct plugin *p, struct plugin_set *__unused)
 	req->total_size = 0;
 	req->reqs = 0;
 	
-	__unused = NULL; /* to make gcc quite */
+	__un1 = NULL; __un2 = NULL; /* to make gcc quite */
 }
 
 void reqsize_ops_init(struct plugin_ops *po)
