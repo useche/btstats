@@ -63,7 +63,7 @@ struct args
 {
 	GHashTable *devs_ranges;
 	gboolean total;
-	struct plug_args pa;
+	char *d2c_det;
 };
 
 struct analyze_args
@@ -213,7 +213,7 @@ void handle_args(int argc, char **argv, struct args *a)
 			a->total = TRUE;
 			break;
 		case 'd':
-			a->pa.d2c_file_detail = optarg;
+			a->d2c_det = optarg;
 			break;
 		default:
 			usage_exit();
@@ -268,8 +268,11 @@ void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps, struct plu
 	struct dev_trace *dt;
 	
 	/* init all plugin sets */
-	for(i = 0; i < ranges->len; ++i)
-		g_array_index(ranges,struct time_range,i).ps = plugin_set_create(pa);
+	for(i = 0; i < ranges->len; ++i) {
+		struct time_range *r = &g_array_index(ranges,struct time_range,i);
+		pa->end_range = r->end;
+		r->ps = plugin_set_create(pa);
+	}
 	
 	/* read and collect stats */
 	dt = dev_trace_create(dev);
@@ -313,6 +316,7 @@ void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer ar)
 int main(int argc, char **argv) 
 {
 	struct args a;
+	struct plug_args pa = { .d2c_det_f = NULL };
 	
 	struct analyze_args ar;
 	struct plugin_set *global_plugin = NULL;
@@ -324,15 +328,24 @@ int main(int argc, char **argv)
 	if(a.total)
 		global_plugin = plugin_set_create(NULL);
 
+	/* open d2c detail file */
+	if(a.d2c_det) {
+		pa.d2c_det_f = fopen(a.d2c_det,"w");
+		if(!pa.d2c_det_f) perror_exit("Opening D2C detail file");
+	}
+
 	/* analyze each device with its ranges */
 	ar.ps = global_plugin;
-	ar.pa = &a.pa;
+	ar.pa = &pa;
 	g_hash_table_foreach(a.devs_ranges,analyze_device_hash,&ar);
 	
 	if(a.total) {
 		plugin_set_print(global_plugin,"All");
 		plugin_set_destroy(global_plugin);
 	}
+	
+	if(a.d2c_det)
+		fclose(pa.d2c_det_f);
 	
 	destroy_plugs_ops();
 	

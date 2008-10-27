@@ -74,7 +74,8 @@ struct plugin_set
 
 struct plug_args
 {
-	char *d2c_file_detail;
+	FILE *d2c_det_f;
+	__u64 end_range;
 };
 
 struct plug_init_dest_funcs

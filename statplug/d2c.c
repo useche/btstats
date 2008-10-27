@@ -68,6 +68,7 @@ struct d2c_data
 	struct reqsize_data *req_dat;
 
 	FILE *detail_f;
+	__u64 end_range;
 };
 
 static void D(struct blk_io_trace *t, void *data)
@@ -152,7 +153,9 @@ static void C(struct blk_io_trace *t, void *data)
 			
 			/* add detail to file @detail_f */
 			if(d2c->detail_f) {
-				e = fprintf(d2c->detail_f,"%llu %llu %f\n",
+				e = fprintf(d2c->detail_f,"%f %f %llu %llu %f\n",
+					NANO_ULL_TO_DOUBLE(d2c->end_range),
+					NANO_ULL_TO_DOUBLE(t->time),
 					t->sector,
 					blks,
 					NANO_ULL_TO_DOUBLE(t->time - dtrace->time));
@@ -226,11 +229,8 @@ void d2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *pia)
 	d2c->ctimes = g_array_sized_new(FALSE,FALSE,sizeof(__u64),TENT_OUTS_RQS);
 	d2c->req_dat = ps->plugs[REQ_SIZE_IND].data;
 	
-	if(pia->d2c_file_detail) {
-		d2c->detail_f = fopen(pia->d2c_file_detail,"a");
-		if(!d2c->detail_f) perror_exit("D2C detail file"); 
-	} else
-		d2c->detail_f = NULL;
+	d2c->detail_f = pia->d2c_det_f;
+	d2c->end_range = pia->end_range;
 }
 
 void d2c_destroy(struct plugin *p)
@@ -241,9 +241,6 @@ void d2c_destroy(struct plugin *p)
 	g_array_free(d2c->dtimes,FALSE);
 	g_array_free(d2c->ctimes,FALSE);
 	g_free(p->data);
-
-	if(d2c->detail_f)
-		fclose(d2c->detail_f);
 }
 
 void d2c_ops_init(struct plugin_ops *po)
