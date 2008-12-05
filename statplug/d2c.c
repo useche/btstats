@@ -202,7 +202,7 @@ void d2c_print_results(const void *data)
 	DECL_ASSIGN_D2C(d2c,data);
 	
 	if(d2c->d2ctime > 0) {
-		double t_time_msec = ((double)d2c->d2ctime)/1000000;
+		double t_time_msec = ((double)d2c->d2ctime)/1e6;
 		double t_req_mb = ((double)d2c->req_dat->total_size)/(1<<11);
 
 		printf("Avg. D2C per I/O: %f (msec)\n",
