@@ -205,14 +205,16 @@ void d2c_print_results(const void *data)
 		double t_time_msec = ((double)d2c->d2ctime)/1e6;
 		double t_req_mb = ((double)d2c->req_dat->total_size)/(1<<11);
 
+		printf("Total time: %f (msec)\n",
+			t_time_msec);
 		printf("Avg. D2C per I/O: %f (msec)\n",
-		       t_time_msec/(d2c->req_dat->reqs));
+			t_time_msec/(d2c->req_dat->reqs));
 		printf("Avg. D2C per block: %f (msec)\n",
-		       t_time_msec/(d2c->req_dat->total_size));
+			t_time_msec/(d2c->req_dat->total_size));
 		printf("Avg. D2C Throughput: %f (MB/sec)\n",
-		       (t_req_mb)/(t_time_msec/1000));
+			(t_req_mb)/(t_time_msec/1000));
 		printf("Max outstanding: %u (reqs)\n",
-		       d2c->maxouts);
+			d2c->maxouts);
 	} else
 		printf("Not enough data for D2C stats\n");
 }
