@@ -42,7 +42,6 @@
 
 #include <glib.h>
 #include <blktrace_api.h>
-#include <inits.h>
 
 typedef void (*event_func_t)(const struct blk_io_trace *, void *);
 struct plugin_ops 
