@@ -85,7 +85,7 @@ void parse_file(char *filename, struct args *a)
 {
 	char *line = NULL;
 	size_t len;
-	char curdev[MAX_FILE_SIZE];
+	char curdev[FILENAME_MAX];
 	double last_start = -1;
 	
 	int e;

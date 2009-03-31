@@ -150,7 +150,7 @@ void read_next_trace(struct trace_file *tf, __u64 genesis)
 void find_input_traces(struct dev_trace *trace, const char *dev)
 {
 	struct dirent *d;
-	char pre_dev_trace[MAX_FILE_SIZE];
+	char pre_dev_trace[FILENAME_MAX];
 	
 	struct trace_file *tf;
 	struct trace_file *min = NULL;

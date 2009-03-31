@@ -43,7 +43,6 @@
 #include <string.h>
 #include <glib.h>
 
-#define MAX_FILE_SIZE 256
 #define MAX_HEAD 256
 #define TENT_OUTS_RQS 32
 
