@@ -101,17 +101,13 @@ void read_next_trace(struct trace_file *tf, __u64 genesis)
 	int e;
 
 	do {
-
 		e = read(tf->fd,&tf->t,sizeof(struct blk_io_trace));
-		if(e==-1) 
-			perror_exit("Reading trace\n");
-		else if(e==0) {
+		if(e==0) {
 			tf->eof = TRUE;
 			break;
+		} else if(e==-1 || e!=sizeof(struct blk_io_trace)) {
+			perror_exit("Reading trace\n");
 		} else {
-			if(e!=sizeof(struct blk_io_trace))
-				error_exit("Reading trace\n");
-
 			/* verify trace and check endianess */
 			if(native_trace<0)
 				native_trace = check_data_endianness(tf->t.magic);
@@ -138,12 +134,10 @@ void read_next_trace(struct trace_file *tf, __u64 genesis)
 			tf->t.time -= genesis;
 			
 			if(tf->t.pdu_len) {
-				char pdu_buf[tf->t.pdu_len];
-				e = read(tf->fd,pdu_buf,tf->t.pdu_len);
-				if(e==-1) perror_exit("Reading trace pdu");
+				e = lseek(tf->fd,tf->t.pdu_len,SEEK_CUR);
+				if(e==-1) perror_exit("Skipping pdu");
 			}
 		}
-
 	} while(not_real_event(&tf->t));
 }
 
