@@ -41,7 +41,20 @@
 #define _LIST_PLUGINS_H_
 
 #include <plugins.h>
-#include <inits.h>
+
+/* macro to declare inits and destroyers of plugins */
+#define DECLARE_PLUG_FUNCS(name)			\
+	void name##_init(struct plugin *p,		\
+	    struct plugin_set *ps,			\
+	    struct plug_args *pia);			\
+	void name##_destroy(struct plugin *p);		\
+	void name##_ops_init(struct plugin_ops *po);
+
+DECLARE_PLUG_FUNCS(reqsize);
+DECLARE_PLUG_FUNCS(seek);
+DECLARE_PLUG_FUNCS(d2c);
+DECLARE_PLUG_FUNCS(merge);
+DECLARE_PLUG_FUNCS(pluging);
 
 /* list of initilizers and destroyers for each function */
 #define N_PLUGINS 5
