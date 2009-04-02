@@ -37,7 +37,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <dev_trace.h>
+#include <trace.h>
 
 #include <glib.h>
 #include <utils.h>
@@ -86,7 +86,7 @@ void min_time(gpointer data, gpointer min)
 void correct_time(gpointer data, gpointer dt_arg)
 {
 	struct trace_file *tf = (struct trace_file *)data;
-	struct dev_trace *dt = (struct dev_trace *)dt_arg;
+	struct trace *dt = (struct trace *)dt_arg;
 	
 	tf->t.time -= dt->genesis;
 }
@@ -96,7 +96,7 @@ gboolean not_real_event(struct blk_io_trace *t)
 	return t->action & BLK_TC_ACT(BLK_TC_NOTIFY);
 }
 
-void read_next_trace(struct trace_file *tf, __u64 genesis)
+void read_next(struct trace_file *tf, __u64 genesis)
 {
 	int e;
 
@@ -141,10 +141,10 @@ void read_next_trace(struct trace_file *tf, __u64 genesis)
 	} while(not_real_event(&tf->t));
 }
 
-void find_input_traces(struct dev_trace *trace, const char *dev)
+void find_input_traces(struct trace *trace, const char *dev)
 {
 	struct dirent *d;
-	char pre_dev_trace[MAX_FILE_SIZE];
+	char pre_trace[MAX_FILE_SIZE];
 	
 	struct trace_file *tf;
 	struct trace_file *min = NULL;
@@ -153,9 +153,9 @@ void find_input_traces(struct dev_trace *trace, const char *dev)
 
 	if(!cur_dir) perror_exit("Opening dir");
 	
-	sprintf(pre_dev_trace,"%s.blktrace.",dev);
+	sprintf(pre_trace,"%s.blktrace.",dev);
 	while((d = readdir(cur_dir))) {
-		if(strstr(d->d_name,pre_dev_trace)) {
+		if(strstr(d->d_name,pre_trace)) {
 			tf = g_new(struct trace_file,1);
 			trace->files = g_slist_append(trace->files,tf);
 			
@@ -164,12 +164,12 @@ void find_input_traces(struct dev_trace *trace, const char *dev)
 			
 			tf->eof = FALSE;
 			
-			read_next_trace(tf,0);
+			read_next(tf,0);
 		}
 	}
 	
 	if(g_slist_length(trace->files)==0) {
-		printf("%s; %s\n",dev,pre_dev_trace);
+		printf("%s; %s\n",dev,pre_trace);
 		error_exit("No such traces\n");
 	}
 
@@ -180,9 +180,9 @@ void find_input_traces(struct dev_trace *trace, const char *dev)
 	closedir(cur_dir);
 }
 
-struct dev_trace *dev_trace_create(const char *dev)
+struct trace *trace_create(const char *dev)
 {
-	struct dev_trace *dt = g_new(struct dev_trace,1);
+	struct trace *dt = g_new(struct trace,1);
 	dt->files = NULL;	
 	find_input_traces(dt,dev);
 	
@@ -198,14 +198,14 @@ void free_data(gpointer data, gpointer __unused)
 	g_free(tf);
 }
 
-void dev_trace_destroy(struct dev_trace *dt) 
+void trace_destroy(struct trace *dt) 
 {
 	g_slist_foreach(dt->files,free_data,NULL);
 	g_slist_free(dt->files);
 	g_free(dt);
 }
 
-gboolean dev_trace_read_next(const struct dev_trace *dt, struct blk_io_trace *t) 
+gboolean trace_read_next(const struct trace *dt, struct blk_io_trace *t) 
 {
 	struct trace_file *min = NULL;
 	
@@ -215,7 +215,7 @@ gboolean dev_trace_read_next(const struct dev_trace *dt, struct blk_io_trace *t)
 		return FALSE;
 	else {
 		*t = min->t;
-		read_next_trace(min, dt->genesis);
+		read_next(min, dt->genesis);
 		return TRUE;
 	}
 }
