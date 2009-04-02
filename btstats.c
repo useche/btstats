@@ -46,7 +46,7 @@
 #include <blktrace_api.h>
 #include <blktrace.h>
 
-#include <dev_trace.h>
+#include <trace.h>
 #include <plugins.h>
 
 #include <utils.h>
@@ -64,21 +64,30 @@ struct args
 	GHashTable *devs_ranges;
 	gboolean total;
 	char *d2c_det;
+	unsigned trc_rdr;
 };
 
 struct analyze_args
 {
 	struct plugin_set *ps;
 	struct plug_args *pa;
+	trace_reader_t reader;
 };
 
 void usage_exit() 
 {
-	error_exit("btstats [-f <file>] [-t] [-d <file>] [<device>]\n\n"
-		   "\t-f: File which list the traces and phases to analyze.\n"
-		   "\t-t: Print the total stats for all traces.\n"
-		   "\t-d: File where all the details of D2C will be stored.\n"
-		   "\t<device>: String of devices/ranges to analyze.\n");
+	error_exit(
+		"Usage: btstats [-f <file>] [-t] [-d <file>] <device>\n\n"
+		"Options:\n"
+		"\t-h: Show this help message and exit"
+		"\t-f: File which list the traces and phases to analyze.\n"
+		"\t-t: Print the total stats for all traces.\n"
+		"\t-d: File where all the details of D2C will be stored.\n"
+		"\t\t<End range> <timestamp> <Sector #> <Req. Size (blks)> <D2C time (sec)>\n"
+		"\t-r: Trace reader to be used\n"
+		"\t\t0: default\n"
+		"\t\t1: reader for device ata_piix\n"
+		"\t<device>: String of devices/ranges to analyze.\n");
 }
 
 void parse_file(char *filename, struct args *a) 
@@ -184,7 +193,7 @@ void parse_dev_str(char *devs, struct args *a)
 
 void handle_args(int argc, char **argv, struct args *a) 
 {
-	int c;
+	int c, r;
 	char *device = NULL;
 	char *file = NULL;
 
@@ -198,10 +207,11 @@ void handle_args(int argc, char **argv, struct args *a)
 				{"total",	no_argument,		0, 't'},
 				{"help",	no_argument,		0, 'h'},
 				{"d2c-detail",	required_argument,	0, 'd'},
+				{"trace-read",	required_argument,	0, 'r'},
 				{0,0,0,0}
 			};		
 		
-		c = getopt_long(argc, argv, "f:thd:", long_options, &option_index);
+		c = getopt_long(argc, argv, "f:thd:r:", long_options, &option_index);
 		
 		if (c == -1) break;
 		
@@ -214,6 +224,11 @@ void handle_args(int argc, char **argv, struct args *a)
 			break;
 		case 'd':
 			a->d2c_det = optarg;
+			break;
+		case 'r':
+			r = sscanf(optarg,"%u",&a->trc_rdr);
+			if (r!=1 || a->trc_rdr >= N_TRCREAD)
+				usage_exit();
 			break;
 		default:
 			usage_exit();
@@ -261,11 +276,14 @@ void range_finish(struct time_range *range,
 	plugin_set_destroy(ps);	
 }
 
-void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps, struct plug_args *pa) 
+void analyze_device(char *dev, GArray *ranges,
+		struct plugin_set *ps,
+		struct plug_args *pa,
+		trace_reader_t read_next) 
 {
 	unsigned i;
 	struct blk_io_trace t;
-	struct dev_trace *dt;
+	struct trace *dt;
 	
 	/* init all plugin sets */
 	for(i = 0; i < ranges->len; ++i) {
@@ -275,8 +293,8 @@ void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps, struct plu
 	}
 	
 	/* read and collect stats */
-	dt = dev_trace_create(dev);
-	while(dev_trace_read_next(dt,&t) && ranges->len > 0) {
+	dt = trace_create(dev);
+	while(read_next(dt,&t) && ranges->len > 0) {
 		i = 0;
 		while(i < ranges->len) {
 			struct time_range *r = &g_array_index(ranges,struct time_range,i);
@@ -292,6 +310,7 @@ void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps, struct plu
 			}
 		}
 	}
+	trace_destroy(dt);
 
 	/* finish the ps which range is beyond the end */
 	for(i = 0; i < ranges->len; ++i) {
@@ -306,8 +325,9 @@ void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer ar)
 	GArray *ranges = ranges_arg;
 	struct plugin_set *global_plugin = ((struct analyze_args *)ar)->ps;
 	struct plug_args *pa = ((struct analyze_args *)ar)->pa;
+	trace_reader_t rdr = ((struct analyze_args *)ar)->reader;
 	
-	analyze_device(dev,ranges,global_plugin,pa);
+	analyze_device(dev,ranges,global_plugin,pa,rdr);
 	
 	free(dev);
 	g_array_free(ranges,TRUE);
@@ -337,6 +357,7 @@ int main(int argc, char **argv)
 	/* analyze each device with its ranges */
 	ar.ps = global_plugin;
 	ar.pa = &pa;
+	ar.reader = reader[a.trc_rdr];
 	g_hash_table_foreach(a.devs_ranges,analyze_device_hash,&ar);
 	
 	if(a.total) {
