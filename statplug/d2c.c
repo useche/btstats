@@ -55,7 +55,6 @@ struct d2c_data
 {
 	__u32 outstanding;
 	__u32 processed;
-	__u32 processed_blks;
 	
 	GTree *prospect_ds;
 	GArray *dtimes;
@@ -87,7 +86,7 @@ static void D(struct blk_io_trace *t, void *data)
 static void __account_reqs(struct d2c_data *d2c) 
 {
 	d2c->outstanding--;
-	if(d2c->outstanding == 0){
+	if(d2c->outstanding == 0) {
 		if(d2c->processed > 0) {
 			unsigned i, j;
 			__u32 outs, maxouts;
@@ -121,7 +120,6 @@ static void __account_reqs(struct d2c_data *d2c)
 
 			/* re-initialize accounters */
 			d2c->processed = 0;
-			d2c->processed_blks = 0;
 			
 			/* empty arrays */
 			g_array_remove_range(d2c->dtimes,
@@ -132,7 +130,7 @@ static void __account_reqs(struct d2c_data *d2c)
 					     d2c->ctimes->len);
 		}
 		
-		assert(d2c->processed == 0 && d2c->processed_blks == 0);
+		assert(d2c->processed == 0);
 		assert(d2c->dtimes->len == 0 && d2c->ctimes->len == 0);
 	}
 }
@@ -149,7 +147,6 @@ static void C(struct blk_io_trace *t, void *data)
 			int e;
 
 			d2c->processed++;
-			d2c->processed_blks += blks;
 			
 			/* add detail to file @detail_f */
 			if(d2c->detail_f) {
@@ -223,7 +220,7 @@ void d2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *pia)
 {
 	struct d2c_data *d2c = p->data = g_new(struct d2c_data,1);
 
-	d2c->outstanding = d2c->processed = d2c->processed_blks = 0;
+	d2c->outstanding = d2c->processed = 0;
 	d2c->d2ctime = d2c->maxouts = 0;
 
 	d2c->prospect_ds = g_tree_new(comp_int64);

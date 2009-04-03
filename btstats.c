@@ -77,9 +77,9 @@ struct analyze_args
 void usage_exit() 
 {
 	error_exit(
-		"Usage: btstats [-f <file>] [-t] [-d <file>] <device>\n\n"
+		"Usage: btstats [-h] [-f <file>] [-r <reader>] [-t] [-d <file>] <device>\n\n"
 		"Options:\n"
-		"\t-h: Show this help message and exit"
+		"\t-h: Show this help message and exit\n"
 		"\t-f: File which list the traces and phases to analyze.\n"
 		"\t-t: Print the total stats for all traces.\n"
 		"\t-d: File where all the details of D2C will be stored.\n"
