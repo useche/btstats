@@ -22,6 +22,10 @@ gboolean trace_ata_piix_read_next(const struct trace *dt, struct blk_io_trace *t
 	} else {
 reread:
 		r = trace_read_next(dt,t);
+
+		/* if the trace reach the end */
+		if(!r) return FALSE;
+
 		switch(t->action & 0xffff) {
 			case __BLK_TA_COMPLETE:
 				if(out_reqs==2) {
@@ -47,8 +51,8 @@ reread:
 					at = *t;
 					at_used = TRUE;
 
-					/* after this, we need to restart
-					 * again 
+					/* after this, we need to reread
+					 * the next trace entry 
 					 */
 					goto reread;
 				}
@@ -59,6 +63,6 @@ reread:
 				out_reqs -= out_reqs>0?1:0;
 				break;
 		}
-		return r;
+		return TRUE;
 	}
 }
