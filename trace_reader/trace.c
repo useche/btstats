@@ -76,7 +76,6 @@ void min_time(gpointer data, gpointer min)
 		if(!(*mintf)) {
 			*mintf = tf;
 		} else {
-			assert(tf->t.time!=(*mintf)->t.time);
 			if(tf->t.time<(*mintf)->t.time)
 				*mintf = tf;
 		}
@@ -155,9 +154,9 @@ void find_input_traces(struct trace *trace, const char *dev)
 	
 	sprintf(pre_trace,"%s.blktrace.",dev);
 	while((d = readdir(cur_dir))) {
-		if(strstr(d->d_name,pre_trace)) {
+		if(strstr(d->d_name,pre_trace)==d->d_name) {
 			tf = g_new(struct trace_file,1);
-			trace->files = g_slist_append(trace->files,tf);
+			trace->files = g_slist_prepend(trace->files,tf);
 			
 			tf->fd = open(d->d_name,O_RDONLY);
 			if(tf->fd<0) perror_exit("Opening tracefile");

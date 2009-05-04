@@ -52,7 +52,6 @@ struct trace_file
 
 struct trace 
 {
-	char *dev;
 	GSList *files;
 	__u64 genesis;
 };
