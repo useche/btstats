@@ -53,15 +53,17 @@
 DECLARE_PLUG_FUNCS(reqsize);
 DECLARE_PLUG_FUNCS(seek);
 DECLARE_PLUG_FUNCS(d2c);
+DECLARE_PLUG_FUNCS(c2d);
 DECLARE_PLUG_FUNCS(merge);
 DECLARE_PLUG_FUNCS(pluging);
 
 /* list of initilizers and destroyers for each function */
-#define N_PLUGINS 5
+#define N_PLUGINS 6
 enum {
 	REQ_SIZE_IND = 0,
 	SEEK_IND,
 	D2C_IND,
+	C2D_IND,
 	MERGE_IND,
 	PLUGING_IND
 };
@@ -83,6 +85,12 @@ static const struct plug_init_dest_funcs plug_init_dest[] =
 		.init = d2c_init,
 		.destroy = d2c_destroy,
 		.ops_init = d2c_ops_init,
+		.ops_destroy = NULL
+	},
+	{
+		.init = c2d_init,
+		.destroy = c2d_destroy,
+		.ops_init = c2d_ops_init,
 		.ops_destroy = NULL
 	},
 	{
