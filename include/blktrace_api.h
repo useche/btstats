@@ -1,3 +1,6 @@
+/* This code was originlly taken from the blktrace project (GPL) and modified
+ * by Luis Useche <luis@cs.fiu.edu> */
+
 #ifndef BLKTRACEAPI_H
 #define BLKTRACEAPI_H
 
