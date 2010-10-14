@@ -15,14 +15,17 @@ SRCS=$(APP).c $(PLUG_SRCS) $(TRCREAD_SRCS)
 # If DEBUG defined, then -ggdb used
 ifdef DEBUG
 OPT_OR_DBG = -ggdb
+CC=cc
 else
 OPT_OR_DBG = -O3
+define CC
+        @echo " [CC]\t$@" && cc
+endef
 endif
 
 INCLUDE=`pkg-config --cflags glib-2.0` -I. -Istatplug/ -Iinclude/ -Itrace_reader/
 CFLAGS=-Wall -Wextra -std=gnu99 $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 LDFLAGS=`pkg-config --libs glib-2.0`
-CC=gcc
 
 all: depend $(APP)
 
