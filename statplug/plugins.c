@@ -50,7 +50,7 @@ void plugin_set_print(const struct plugin_set *ps, const char *head)
 void plugin_set_add_trace(struct plugin_set *ps, const struct blk_io_trace *t) 
 {
 	int i;
-	int act;
+	long act;
 	event_func_t event_handler;
 	struct plugin *p;
 	

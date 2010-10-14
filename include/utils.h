@@ -27,8 +27,8 @@
 
 inline static int comp_int(gconstpointer a,gconstpointer b) 
 {
-	int x = (int)a;
-	int y = (int)b;
+	long x = (long)a;
+	long y = (long)b;
 	
 	return x-y;
 }
