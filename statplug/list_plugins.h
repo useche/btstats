@@ -14,6 +14,7 @@
 DECLARE_PLUG_FUNCS(reqsize);
 DECLARE_PLUG_FUNCS(seek);
 DECLARE_PLUG_FUNCS(d2c);
+DECLARE_PLUG_FUNCS(q2c);
 DECLARE_PLUG_FUNCS(c2d);
 DECLARE_PLUG_FUNCS(merge);
 DECLARE_PLUG_FUNCS(pluging);
@@ -25,6 +26,7 @@ enum {
 	SEEK_IND,
 	D2C_IND,
 	C2D_IND,
+	Q2C_IND,
 	MERGE_IND,
 	PLUGING_IND
 };
@@ -46,6 +48,12 @@ static const struct plug_init_dest_funcs plug_init_dest[] =
 		.init = d2c_init,
 		.destroy = d2c_destroy,
 		.ops_init = d2c_ops_init,
+		.ops_destroy = NULL
+	},
+	{
+		.init = q2c_init,
+		.destroy = q2c_destroy,
+		.ops_init = q2c_ops_init,
 		.ops_destroy = NULL
 	},
 	{

@@ -163,7 +163,7 @@ void d2c_print_results(const void *data)
 		double t_time_msec = ((double)d2c->d2ctime)/1e6;
 		double t_req_mb = ((double)d2c->req_dat->total_size)/(1<<11);
 
-		printf("Total time: %f (msec)\n",
+		printf("D2C Total time: %f (msec)\n",
 			t_time_msec);
 		printf("Avg. D2C per I/O: %f (msec)\n",
 			t_time_msec/(d2c->req_dat->reqs));
