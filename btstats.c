@@ -26,7 +26,7 @@ struct args
 	gboolean total;
 	char *d2c_det;
 	unsigned trc_rdr;
-	char *q2c_oio;
+	char *i2c_oio;
 };
 
 struct analyze_args
@@ -39,13 +39,14 @@ struct analyze_args
 void usage_exit() 
 {
 	error_exit(
-		"Usage: btstats [-h] [-f <file>] [-r <reader>] [-t] [-d <file>] <device>\n\n"
+		"Usage: btstats [-h] [-f <file>] [-r <reader>] [-t] [-d <file>] [-i <file>] <device>\n\n"
 		"Options:\n"
 		"\t-h: Show this help message and exit\n"
 		"\t-f: File which list the traces and phases to analyze.\n"
 		"\t-t: Print the total stats for all traces.\n"
-		"\t-d: File where all the details of D2C will be stored.\n"
-		"\t\t<End range> <timestamp> <Sector #> <Req. Size (blks)> <D2C time (sec)>\n"
+		"\t-d: File sufix where all the details of D2C will be stored.\n"
+		"\t\t<timestamp> <Sector #> <Req. Size (blks)> <D2C time (sec)>\n"
+		"\t-i: File sufix where all the changes in OIO for I2C are logged.\n"
 		"\t-r: Trace reader to be used\n"
 		"\t\t0: default\n"
 		"\t\t1: reader for device ata_piix\n"
@@ -170,11 +171,11 @@ void handle_args(int argc, char **argv, struct args *a)
 				{"help",	no_argument,		0, 'h'},
 				{"d2c-detail",	required_argument,	0, 'd'},
 				{"trace-read",	required_argument,	0, 'r'},
-				{"q2c-oio",	required_argument,	0, 'q'},
+				{"i2c-oio",	required_argument,	0, 'i'},
 				{0,0,0,0}
 			};		
 		
-		c = getopt_long(argc, argv, "f:thd:r:q:", long_options, &option_index);
+		c = getopt_long(argc, argv, "f:thd:r:i:", long_options, &option_index);
 		
 		if (c == -1) break;
 		
@@ -193,8 +194,8 @@ void handle_args(int argc, char **argv, struct args *a)
 			if (r!=1 || a->trc_rdr >= N_TRCREAD)
 				usage_exit();
 			break;
-		case 'q':
-			a->q2c_oio = optarg;
+		case 'i':
+			a->i2c_oio = optarg;
 			break;
 		default:
 			usage_exit();
@@ -302,17 +303,21 @@ void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer ar)
 int main(int argc, char **argv) 
 {
 	struct args a;
-	struct plug_args pa = {NULL, 0, NULL};
+	struct plug_args pa;
 	
 	struct analyze_args ar;
 	struct plugin_set *global_plugin = NULL;
 	
 	handle_args(argc,argv,&a);
 	
-	init_plugs_ops();	
+	init_plugs_ops();
 	
 	if(a.total)
 		global_plugin = plugin_set_create(NULL);
+
+	/* populate plugin arguments */
+	pa.d2c_det_f = a.d2c_det;
+	pa.i2c_oio_f = a.i2c_oio;
 
 	/* analyze each device with its ranges */
 	ar.ps = global_plugin;

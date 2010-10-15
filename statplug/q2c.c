@@ -102,6 +102,7 @@ void q2c_add(void *data1, const void *data2)
 	DECL_ASSIGN_Q2C(q2c2,data2);
 
 	q2c1->q2c_time += q2c2->q2c_time;
+	q2c1->maxouts = MAX(q2c1->maxouts, q2c2->maxouts);
 }
 
 void q2c_print_results(const void *data)

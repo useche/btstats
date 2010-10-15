@@ -38,8 +38,8 @@ struct plug_args
 	char *d2c_det_f;
 	__u64 end_range;
 
-	/* q2c args */
-	char *q2c_oio_f;
+	/* i2c args */
+	char *i2c_oio_f;
 };
 
 struct plug_init_dest_funcs

@@ -1,0 +1,7 @@
+*.blktrace.*
+*.swp
+tags
+.depend
+*.o
+*/*.o
+btstats
