@@ -189,7 +189,12 @@ void d2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *pia)
 	d2c->ctimes = g_array_sized_new(FALSE,FALSE,sizeof(__u64),TENT_OUTS_RQS);
 	d2c->req_dat = ps->plugs[REQ_SIZE_IND].data;
 	
-	d2c->detail_f = pia->d2c_det_f;
+	/* open d2c detail file */
+	d2c->detail_f = NULL;
+	if(pia->d2c_det_f) {
+		d2c->detail_f = fopen(pia->d2c_det_f,"w");
+		if(!d2c->detail_f) perror_exit("Opening D2C detail file");
+	}
 	d2c->end_range = pia->end_range;
 }
 
@@ -200,6 +205,8 @@ void d2c_destroy(struct plugin *p)
 	g_tree_destroy(d2c->prospect_ds);
 	g_array_free(d2c->dtimes,FALSE);
 	g_array_free(d2c->ctimes,FALSE);
+	if(d2c->detail_f)
+		fclose(d2c->detail_f);
 	g_free(p->data);
 }
 

@@ -26,6 +26,7 @@ struct args
 	gboolean total;
 	char *d2c_det;
 	unsigned trc_rdr;
+	char *q2c_oio;
 };
 
 struct analyze_args
@@ -169,10 +170,11 @@ void handle_args(int argc, char **argv, struct args *a)
 				{"help",	no_argument,		0, 'h'},
 				{"d2c-detail",	required_argument,	0, 'd'},
 				{"trace-read",	required_argument,	0, 'r'},
+				{"q2c-oio",	required_argument,	0, 'q'},
 				{0,0,0,0}
 			};		
 		
-		c = getopt_long(argc, argv, "f:thd:r:", long_options, &option_index);
+		c = getopt_long(argc, argv, "f:thd:r:q:", long_options, &option_index);
 		
 		if (c == -1) break;
 		
@@ -190,6 +192,9 @@ void handle_args(int argc, char **argv, struct args *a)
 			r = sscanf(optarg,"%u",&a->trc_rdr);
 			if (r!=1 || a->trc_rdr >= N_TRCREAD)
 				usage_exit();
+			break;
+		case 'q':
+			a->q2c_oio = optarg;
 			break;
 		default:
 			usage_exit();
@@ -297,7 +302,7 @@ void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer ar)
 int main(int argc, char **argv) 
 {
 	struct args a;
-	struct plug_args pa = { .d2c_det_f = NULL };
+	struct plug_args pa = {NULL, 0, NULL};
 	
 	struct analyze_args ar;
 	struct plugin_set *global_plugin = NULL;
@@ -309,12 +314,6 @@ int main(int argc, char **argv)
 	if(a.total)
 		global_plugin = plugin_set_create(NULL);
 
-	/* open d2c detail file */
-	if(a.d2c_det) {
-		pa.d2c_det_f = fopen(a.d2c_det,"w");
-		if(!pa.d2c_det_f) perror_exit("Opening D2C detail file");
-	}
-
 	/* analyze each device with its ranges */
 	ar.ps = global_plugin;
 	ar.pa = &pa;
@@ -325,9 +324,6 @@ int main(int argc, char **argv)
 		plugin_set_print(global_plugin,"All");
 		plugin_set_destroy(global_plugin);
 	}
-	
-	if(a.d2c_det)
-		fclose(pa.d2c_det_f);
 	
 	destroy_plugs_ops();
 	
