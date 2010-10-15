@@ -155,5 +155,7 @@ void q2c_ops_init(struct plugin_ops *po)
 
 void q2c_destroy(struct plugin *p)
 {
+	DECL_ASSIGN_Q2C(q2c,p->data);
+	g_hash_table_destroy(q2c->qs);
 	g_free(p->data);
 }
