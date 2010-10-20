@@ -27,6 +27,7 @@ struct args
 	char *d2c_det;
 	unsigned trc_rdr;
 	char *i2c_oio;
+	char *i2c_oio_hist;
 };
 
 struct analyze_args
@@ -47,6 +48,7 @@ void usage_exit()
 		"\t-d: File sufix where all the details of D2C will be stored.\n"
 		"\t\t<timestamp> <Sector #> <Req. Size (blks)> <D2C time (sec)>\n"
 		"\t-i: File sufix where all the changes in OIO for I2C are logged.\n"
+		"\t-s: File sufix where the histogram of OIO for I2C is printed.\n"
 		"\t-r: Trace reader to be used\n"
 		"\t\t0: default\n"
 		"\t\t1: reader for device ata_piix\n"
@@ -166,16 +168,17 @@ void handle_args(int argc, char **argv, struct args *a)
 		int option_index = 0;
 		static struct option long_options[] =
 			{
-				{"file",	required_argument,	0, 'f'},
-				{"total",	no_argument,		0, 't'},
-				{"help",	no_argument,		0, 'h'},
-				{"d2c-detail",	required_argument,	0, 'd'},
-				{"trace-read",	required_argument,	0, 'r'},
-				{"i2c-oio",	required_argument,	0, 'i'},
+				{"file",		required_argument,	0, 'f'},
+				{"total",		no_argument,		0, 't'},
+				{"help",		no_argument,		0, 'h'},
+				{"d2c-detail",		required_argument,	0, 'd'},
+				{"trace-read",		required_argument,	0, 'r'},
+				{"i2c-oio",		required_argument,	0, 'i'},
+				{"i2c-oio-hist",	required_argument,	0, 's'},
 				{0,0,0,0}
 			};		
 		
-		c = getopt_long(argc, argv, "f:thd:r:i:", long_options, &option_index);
+		c = getopt_long(argc, argv, "f:thd:r:i:s:", long_options, &option_index);
 		
 		if (c == -1) break;
 		
@@ -196,6 +199,9 @@ void handle_args(int argc, char **argv, struct args *a)
 			break;
 		case 'i':
 			a->i2c_oio = optarg;
+			break;
+		case 's':
+			a->i2c_oio_hist = optarg;
 			break;
 		default:
 			usage_exit();
@@ -318,6 +324,7 @@ int main(int argc, char **argv)
 	/* populate plugin arguments */
 	pa.d2c_det_f = a.d2c_det;
 	pa.i2c_oio_f = a.i2c_oio;
+	pa.i2c_oio_hist_f = a.i2c_oio_hist;
 
 	/* analyze each device with its ranges */
 	ar.ps = global_plugin;

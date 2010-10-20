@@ -28,6 +28,7 @@ struct i2c_data
 	__u64 *oio;
 	__u32 oio_size;
 	__u64 oio_prev_time;
+	FILE *oio_hist_f;
 };
 
 static void write_outs(struct i2c_data *i2c, struct blk_io_trace *t)
@@ -102,7 +103,7 @@ void i2c_add(void *data1, const void *data2)
 		i2c1->oio_size = i2c2->oio_size;
 	}
 
-	for (i = 0; i < i2c2->maxouts; i++) {
+	for (i = 0; i <= i2c2->maxouts; i++) {
 		i2c1->oio[i] += i2c2->oio[i];
 	}
 }
@@ -110,7 +111,7 @@ void i2c_add(void *data1, const void *data2)
 void i2c_print_results(const void *data)
 {
 	DECL_ASSIGN_I2C(i2c,data);
-	double p[i2c->maxouts];
+	double p;
 	double avg = 0;
 	__u32 i;
 	__u64 tot_time = 0;
@@ -119,9 +120,13 @@ void i2c_print_results(const void *data)
 		tot_time += i2c->oio[i];
 	}
 
-	for (i = 0; i < i2c->maxouts; i++) {
-		p[i] = ((double)i2c->oio[i])/((double)tot_time);
-		avg += p[i]*i;
+	for (i = 0; i <= i2c->maxouts; i++) {
+		p = ((double)i2c->oio[i])/((double)tot_time);
+
+		if(i2c->oio_hist_f)
+			fprintf(i2c->oio_hist_f, "%u\t%.2lf\n",i,100*p);
+
+		avg += p*i;
 	}
 
 	printf("I2C Max. OIO: %u, Avg: %.2lf\n",i2c->maxouts,avg);
@@ -141,6 +146,13 @@ void i2c_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *pa)
 		get_filename(filename, "i2c_oio", pa->i2c_oio_f, pa->end_range);
 		i2c->oio_f = fopen(filename,"w");
 		if(!i2c->oio_f) perror_exit("Opening I2C detail file");
+	}
+
+	i2c->oio_hist_f = NULL;
+	if(pa->i2c_oio_hist_f) {
+		get_filename(filename, "i2c_oio_hist", pa->i2c_oio_hist_f, pa->end_range);
+		i2c->oio_hist_f = fopen(filename,"w");
+		if(!i2c->oio_hist_f) perror_exit("Opening I2C detail file");
 	}
 
 	i2c->oio = NULL;
@@ -166,6 +178,9 @@ void i2c_destroy(struct plugin *p)
 
 	if(i2c->oio_f)
 		fclose(i2c->oio_f);
+
+	if(i2c->oio_hist_f)
+		fclose(i2c->oio_hist_f);
 
 	free(i2c->oio);
 

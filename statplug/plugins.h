@@ -40,6 +40,7 @@ struct plug_args
 
 	/* i2c args */
 	char *i2c_oio_f;
+	char *i2c_oio_hist_f;
 };
 
 struct plug_init_dest_funcs
