@@ -169,7 +169,7 @@ void d2c_print_results(const void *data)
 			t_time_msec/(d2c->req_dat->total_size));
 		printf("Avg. D2C Throughput: %f (MB/sec)\n",
 			(t_req_mb)/(t_time_msec/1000));
-		printf("Max outstanding: %u (reqs)\n",
+		printf("D2C Max outstanding: %u (reqs)\n",
 			d2c->maxouts);
 	} else
 		printf("Not enough data for D2C stats\n");

@@ -121,7 +121,7 @@ void q2c_print_results(const void *data)
 			t_time_msec/(q2c->req_dat->total_size));
 		printf("Avg. Q2C Throughput: %f (MB/sec)\n",
 			(t_req_mb)/(t_time_msec/1000));
-		printf("Max outstanding: %u (reqs)\n",
+		printf("Q2C Max outstanding: %u (reqs)\n",
 			q2c->maxouts);
 	} else
 		printf("Not enough data for Q2C stats\n");
