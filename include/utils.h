@@ -26,8 +26,10 @@
 	type *name = g_new(type,1);		\
 	memcpy(name,src,sizeof(type));		\
 	
-#define BIT_START(t)  (t->sector)
-#define BIT_END(t)    (t->sector + (t->bytes >> 9))
+#define BIT_START(t)	(t->sector)
+#define BIT_END(t)	(t->sector + (t->bytes >> 9))
+
+#define BLK_SIZE	(1U<<9)
 
 inline static int comp_int(gconstpointer a,gconstpointer b) 
 {
