@@ -14,7 +14,7 @@ SRCS=$(APP).c $(PLUG_SRCS) $(TRCREAD_SRCS)
 
 # If DEBUG defined, then -ggdb used
 ifdef DEBUG
-OPT_OR_DBG = -ggdb
+OPT_OR_DBG = -g3
 CC=cc
 else
 OPT_OR_DBG = -O3

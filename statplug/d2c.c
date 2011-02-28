@@ -43,10 +43,10 @@ static void D(struct blk_io_trace *t, void *data)
 	}
 }
 
-static void __account_reqs(struct d2c_data *d2c) 
+static void __account_reqs(struct d2c_data *d2c, gboolean finished) 
 {
 	d2c->outstanding--;
-	if(d2c->outstanding == 0) {
+	if(d2c->outstanding == 0 || finished) {
 		if(d2c->processed > 0) {
 			unsigned i, j;
 			__u32 outs, maxouts;
@@ -125,7 +125,7 @@ static void C(struct blk_io_trace *t, void *data)
 		g_tree_remove(d2c->prospect_ds,&dtrace->sector);
 		g_free(dtrace);
 		
-		__account_reqs(d2c);
+		__account_reqs(d2c, FALSE);
 	}
 }
 
@@ -141,7 +141,7 @@ static void R(struct blk_io_trace *t, void *data)
 		g_tree_remove(d2c->prospect_ds,&dtrace->sector);
 		g_free(dtrace);		
 
-		__account_reqs(d2c);
+		__account_reqs(d2c, FALSE);
 	}
 }
 
@@ -157,6 +157,8 @@ void d2c_print_results(const void *data)
 {
 	DECL_ASSIGN_D2C(d2c,data);
 	
+	__account_reqs(d2c, TRUE);
+
 	if(d2c->d2ctime > 0) {
 		double t_time_msec = ((double)d2c->d2ctime)/1e6;
 		double t_req_mb = ((double)d2c->req_dat->total_size)/(1<<11);

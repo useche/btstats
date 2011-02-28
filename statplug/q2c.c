@@ -109,6 +109,10 @@ void q2c_print_results(const void *data)
 {
 	DECL_ASSIGN_Q2C(q2c,data);
 
+	/* include all the outstanding I/Os stats if any */
+	if(q2c->end > 0)
+		q2c->q2c_time += q2c->end - q2c->start;
+
 	if(q2c->q2c_time > 0) {
 		double t_time_msec = ((double)q2c->q2c_time)/1e6;
 		double t_req_mb = ((double)q2c->req_dat->total_size)/(1<<11);

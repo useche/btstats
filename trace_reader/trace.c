@@ -53,7 +53,9 @@ void correct_time(gpointer data, gpointer dt_arg)
 
 gboolean not_real_event(struct blk_io_trace *t)
 {
-	return t->action & BLK_TC_ACT(BLK_TC_NOTIFY);
+	return	(t->action & BLK_TC_ACT(BLK_TC_NOTIFY))	||
+		(t->action & BLK_TC_ACT(BLK_TC_DISCARD))||
+		(t->action & BLK_TC_ACT(BLK_TC_DRV_DATA));
 }
 
 void read_next(struct trace_file *tf, __u64 genesis)
