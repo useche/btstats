@@ -21,7 +21,6 @@ DECLARE_PLUG_FUNCS(merge);
 DECLARE_PLUG_FUNCS(pluging);
 
 /* list of initilizers and destroyers for each function */
-#define N_PLUGINS 6
 enum {
 	REQ_SIZE_IND = 0,
 	SEEK_IND,
@@ -30,7 +29,8 @@ enum {
 	Q2C_IND,
 	I2C_IND,
 	MERGE_IND,
-	PLUGING_IND
+	PLUGING_IND,
+	N_PLUGINS
 };
 static const struct plug_init_dest_funcs plug_init_dest[] =
 {
