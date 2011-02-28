@@ -8,7 +8,6 @@
 #include <plugins.h>
 #include <utils.h>
 #include <list_plugins.h>
-#include <reqsize.h>
 
 #define DECL_ASSIGN_Q2C(name,data)				\
 	struct q2c_data *name = (struct q2c_data *)data
@@ -28,7 +27,8 @@ struct q2c_data
 	__u32 maxouts;
 
 	/* req size data */
-	struct reqsize_data *req_dat;
+	__u64 q_reqs;
+	__u64 q_total_size;
 };
 
 struct proc_q_arg
@@ -90,9 +90,13 @@ static void Q(struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_Q2C(q2c,data);
 
+	__u64 blks = t_blks(t);
+
 	DECL_DUP(struct blk_io_trace,new_t,t);
 	g_hash_table_insert(q2c->qs, new_t, new_t);
 	q2c->outstanding++;
+	q2c->q_reqs++;
+	q2c->q_total_size+=blks;
 	q2c->maxouts = MAX(q2c->maxouts, q2c->outstanding);
 }
 
@@ -115,14 +119,14 @@ void q2c_print_results(const void *data)
 
 	if(q2c->q2c_time > 0) {
 		double t_time_msec = ((double)q2c->q2c_time)/1e6;
-		double t_req_mb = ((double)q2c->req_dat->total_size)/(1<<11);
+		double t_req_mb = ((double)q2c->q_total_size)/(1<<11);
 
 		printf("Q2C Total time: %f (msec)\n",
 			t_time_msec);
 		printf("Avg. Q2C per I/O: %f (msec)\n",
-			t_time_msec/(q2c->req_dat->reqs));
+			t_time_msec/(q2c->q_reqs));
 		printf("Avg. Q2C per block: %f (msec)\n",
-			t_time_msec/(q2c->req_dat->total_size));
+			t_time_msec/(q2c->q_total_size));
 		printf("Avg. Q2C Throughput: %f (MB/sec)\n",
 			(t_req_mb)/(t_time_msec/1000));
 		printf("Q2C Max outstanding: %u (reqs)\n",
@@ -131,7 +135,7 @@ void q2c_print_results(const void *data)
 		printf("Not enough data for Q2C stats\n");
 }
 
-void q2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *__un1)
+void q2c_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un2)
 {
 	struct q2c_data *q2c = p->data = g_new(struct q2c_data,1);
 	q2c->qs = g_hash_table_new_full(g_direct_hash,
@@ -140,12 +144,11 @@ void q2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *__un1)
 			g_free);
 	restart_ongoing(q2c);
 	
-	q2c->q2c_time = 0;
-	q2c->maxouts = 0;
-
-	q2c->req_dat = ps->plugs[REQ_SIZE_IND].data;
+	q2c->q2c_time = q2c->maxouts = 0;
+	q2c->q_reqs = q2c->q_total_size = 0;
 	
 	__un1 = NULL; /* to make gcc quite */
+	__un2 = NULL;
 }
 
 void q2c_ops_init(struct plugin_ops *po)
