@@ -22,7 +22,6 @@
 #define N_BINS		(21)
 #define BINS_SEP	(8)
 
-#define IS_WRITE(t)	((t->action & BLK_TC_ACT(BLK_TC_WRITE)) != 0)
 struct oio_data
 {
 #define READ	0
