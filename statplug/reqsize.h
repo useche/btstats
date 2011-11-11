@@ -10,4 +10,5 @@ struct reqsize_data
 	__u64 max;
 	__u64 total_size;
 	__u64 reqs;
+	__u64 reads;
 };
