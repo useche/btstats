@@ -12,14 +12,17 @@ TRCREAD = $(patsubst %.c,%.o,$(TRCREAD_SRCS))
 APP_DEP=$(APP).o $(PLUGS) $(TRCREAD)
 SRCS=$(APP).c $(PLUG_SRCS) $(TRCREAD_SRCS)
 
+# for some reason it does not work with gcc 4.5 or 4.6
+COMPILER=gcc-4.4
+
 # If DEBUG defined, then -ggdb used
 ifdef DEBUG
 OPT_OR_DBG = -g3
-CC=cc
+CC=${COMPILER}
 else
 OPT_OR_DBG = -O3
 define CC
-        @echo " [CC] $@" && cc
+        @echo " [CC] $@" && ${COMPILER}
 endef
 endif
 
