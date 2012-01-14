@@ -16,9 +16,9 @@
 		exit(EXIT_FAILURE);		\
 	} while(0)
 
-#define error_exit(msg)				\
+#define error_exit(msg, args...)		\
 	do {					\
-		fprintf(stderr,msg);		\
+		fprintf(stderr,msg,##args);	\
 		exit(EXIT_FAILURE);		\
 	} while(0)
 

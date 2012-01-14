@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <getopt.h>
+#include <libgen.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -229,6 +230,7 @@ void range_finish(struct time_range *range,
 {
 	char head[MAX_HEAD];
 	char end_range[MAX_HEAD];
+	char *devc = strdup(dev);
 	
 	/* adding the current plugin set to the global ps */
 	if(gps)
@@ -240,13 +242,15 @@ void range_finish(struct time_range *range,
 		sprintf(end_range,"%.4f",NANO_ULL_TO_DOUBLE(range->end));
 	
 	sprintf(head,"%s[%.4f:%s]",
-		dev,
+		basename(devc),
 		NANO_ULL_TO_DOUBLE(range->start),
 		end_range);
 	
 	
 	plugin_set_print(ps,head);
 	plugin_set_destroy(ps);	
+
+	free(devc);
 }
 
 void analyze_device(char *dev, GArray *ranges,

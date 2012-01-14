@@ -4,6 +4,7 @@
 #include <utils.h>
 #include <unistd.h>
 #include <string.h>
+#include <libgen.h>
 
 #include <asm/types.h>
 #include <sys/types.h>
@@ -107,21 +108,30 @@ void find_input_traces(struct trace *trace, const char *dev)
 {
 	struct dirent *d;
 	char pre_trace[FILENAME_MAX];
+	char file_path[FILENAME_MAX];
 	
 	struct trace_file *tf;
 	struct trace_file *min = NULL;
+
+	char *basen, *dirn;
+	char *basec = strdup(dev);
+	char *dirc = strdup(dev);
 	
-	DIR *cur_dir = opendir(".");
+	basen = basename(basec);
+	dirn = dirname(dirc);
+	DIR *cur_dir = opendir(dirn);
 
 	if(!cur_dir) perror_exit("Opening dir");
 	
-	sprintf(pre_trace,"%s.blktrace.",dev);
+	sprintf(pre_trace,"%s.blktrace.",basen);
 	while((d = readdir(cur_dir))) {
 		if(strstr(d->d_name,pre_trace)==d->d_name) {
 			tf = g_new(struct trace_file,1);
 			trace->files = g_slist_prepend(trace->files,tf);
 			
-			tf->fd = open(d->d_name,O_RDONLY);
+			sprintf(file_path,"%s/%s", dirn, d->d_name);
+
+			tf->fd = open(file_path,O_RDONLY);
 			if(tf->fd<0) perror_exit("Opening tracefile");
 			
 			tf->eof = FALSE;
@@ -130,16 +140,16 @@ void find_input_traces(struct trace *trace, const char *dev)
 		}
 	}
 	
-	if(g_slist_length(trace->files)==0) {
-		printf("%s; %s\n",dev,pre_trace);
-		error_exit("No such traces\n");
-	}
+	if(g_slist_length(trace->files)==0)
+		error_exit("No such traces: %s\n", dev);
 
 	g_slist_foreach(trace->files,min_time,&min);
 	trace->genesis = min->t.time;
 	g_slist_foreach(trace->files,correct_time,trace);
 	
 	closedir(cur_dir);
+	free(basec);
+	free(dirc);
 }
 
 struct trace *trace_create(const char *dev)
