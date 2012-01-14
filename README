@@ -40,7 +40,7 @@ statistics that I use in my research. The following list explain each of them.
 Usage
 -----
 
-        Usage: btstats [-h] [-f <file>] [-r <reader>] [-t] [-d <file>] [-i <file>] <device>
+        Usage: btstats [-h] [-f <file>] [-r <reader>] [-t] [-d <file>] [-i <file>] [<trace> .. <trace>]
 
         Options:
                 -h: Show this help message and exit
@@ -52,8 +52,8 @@ Usage
                 -s: File sufix where the histogram of OIO for I2C is printed.
                 -r: Trace reader to be used
                         0: default
-                        1: reader for device ata_piix
-                <device>: String of devices/ranges to analyze.
+                        1: reader for driver ata_piix
+                <trace>: String of device/range to analyze. Exclusive with -f.
 
 License
 -------

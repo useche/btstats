@@ -40,7 +40,7 @@ struct analyze_args
 void usage_exit() 
 {
 	error_exit(
-		"Usage: btstats [-h] [-f <file>] [-r <reader>] [-t] [-d <file>] [-i <file>] <device>\n\n"
+		"Usage: btstats [-h] [-f <file>] [-r <reader>] [-t] [-d <file>] [-i <file>] [<trace> .. <trace>]\n\n"
 		"Options:\n"
 		"\t-h: Show this help message and exit\n"
 		"\t-f: File which list the traces and phases to analyze.\n"
@@ -51,8 +51,8 @@ void usage_exit()
 		"\t-s: File sufix where the histogram of OIO for I2C is printed.\n"
 		"\t-r: Trace reader to be used\n"
 		"\t\t0: default\n"
-		"\t\t1: reader for device ata_piix\n"
-		"\t<device>: String of devices/ranges to analyze.\n");
+		"\t\t1: reader for driver ata_piix\n"
+		"\t<trace>: String of device/range to analyze. Exclusive with -f.\n");
 }
 
 void parse_file(char *filename, struct args *a) 
@@ -113,20 +113,18 @@ void parse_file(char *filename, struct args *a)
 	}
 }
 
-void parse_dev_str(char *devs, struct args *a)
+void parse_dev_str(char **devs, struct args *a)
 {
 	int i, e;
 	
-	gchar **raw_dev_range = g_strsplit(devs,",",-1);
-	
 	a->devs_ranges = g_hash_table_new(g_str_hash,g_str_equal);
 	
-	for(i=0; raw_dev_range[i]; ++i) {
+	for(i=0; devs[i]; ++i) {
 		GArray *ranges = NULL;
 		struct time_range r;
-		
+
 		char *dev = NULL;
-		char **dev_pair = g_strsplit(raw_dev_range[i],"@",2);
+		char **dev_pair = g_strsplit(devs[i],"@",2);
 		
 		double d_start = 0;
 		double d_end = -1;
@@ -152,14 +150,11 @@ void parse_dev_str(char *devs, struct args *a)
 		
 		g_strfreev(dev_pair);
 	}
-	
-	g_strfreev(raw_dev_range);
 }
 
 void handle_args(int argc, char **argv, struct args *a) 
 {
 	int c, r;
-	char *device = NULL;
 	char *file = NULL;
 
 	memset(a,0,sizeof(struct args));
@@ -209,17 +204,14 @@ void handle_args(int argc, char **argv, struct args *a)
 		}
 	}
 	
-	if((!file && argc == optind)||
-	   (file && argc != optind) ||
-	   (!file && argc > optind+1))
+	if((file && argc != optind)||
+	   (!file && argc == optind))
 		usage_exit();
-	else
-		device = argv[optind];
 	
-	if(device)
-		parse_dev_str(device,a);
-	else
+	if(file)
 		parse_file(file,a);
+	else
+		parse_dev_str(&argv[optind],a);
 }
 
 void range_finish(struct time_range *range,
