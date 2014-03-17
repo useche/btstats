@@ -77,8 +77,6 @@ void seek_init(struct plugin *p, struct plugin_set *ps, struct plug_args *__un)
 	seek->total = 0;
 	seek->seeks = 0;
 	seek->req_dat = (struct reqsize_data *)ps->plugs[REQ_SIZE_IND].data;
-
-	__un = NULL;
 }
 
 void seek_destroy(struct plugin *p)

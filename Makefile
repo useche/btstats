@@ -12,8 +12,7 @@ TRCREAD = $(patsubst %.c,%.o,$(TRCREAD_SRCS))
 APP_DEP=$(APP).o $(PLUGS) $(TRCREAD)
 SRCS=$(APP).c $(PLUG_SRCS) $(TRCREAD_SRCS)
 
-# for some reason it does not work with gcc 4.5 or 4.6
-COMPILER=gcc-4.4
+COMPILER=gcc
 
 # If DEBUG defined, then -ggdb used
 ifdef DEBUG
@@ -27,7 +26,7 @@ endef
 endif
 
 INCLUDE=`pkg-config --cflags glib-2.0` -I. -Istatplug/ -Iinclude/ -Itrace_reader/
-CFLAGS=-Wall -Wextra -std=gnu99 $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
+CFLAGS=-Wall -Wextra -Werror -Wno-unused-parameter -std=gnu99 $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 LDFLAGS=`pkg-config --libs glib-2.0 gsl`
 
 all: depend $(APP)
@@ -35,7 +34,7 @@ all: depend $(APP)
 $(APP): | depend
 
 $(APP): $(APP_DEP)
-	$(CC) $(LDFLAGS) $(APP_DEP) -o $@
+	$(CC) $(APP_DEP) $(LDFLAGS) -o $@
 
 clean:
 	rm -rf $(APP) $(APP_DEP) .depend
