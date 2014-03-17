@@ -60,8 +60,6 @@ void reqsize_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *
 	req->total_size = 0;
 	req->reqs = 0;
 	req->reads = 0;
-	
-	__un1 = NULL; __un2 = NULL; /* to make gcc quite */
 }
 
 void reqsize_ops_init(struct plugin_ops *po)

@@ -80,8 +80,6 @@ void pluging_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *
 	plug->total = 0;
 	plug->nplugs = 0;
 	plug->plug_time = 0;
-	
-	__un1 = NULL; __un2 = NULL;
 }
 
 void pluging_ops_init(struct plugin_ops *po)

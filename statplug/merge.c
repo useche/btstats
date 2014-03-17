@@ -18,8 +18,6 @@ static void M(struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_MERGE(m,data);
 
-	t = NULL;
-
 	if(m->ins)
 		m->ms++;
 }
@@ -28,8 +26,6 @@ static void F(struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_MERGE(m,data);
 	
-	t = NULL;
-	
 	if(m->ins)
 		m->fs++;	
 }
@@ -37,9 +33,7 @@ static void F(struct blk_io_trace *t, void *data)
 static void I(struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_MERGE(m,data);
-	
-	t = NULL;
-	
+
 	m->ins++;
 }
 
@@ -70,8 +64,6 @@ void merge_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__
 {
 	struct merge_data *m = p->data = g_new(struct merge_data,1);
 	m->ms = m->fs = m->ins = 0;
-	
-	__un1 = NULL; __un2 = NULL; /* make gcc quite */
 }
 
 void merge_ops_init(struct plugin_ops *po)

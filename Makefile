@@ -26,7 +26,7 @@ endef
 endif
 
 INCLUDE=`pkg-config --cflags glib-2.0` -I. -Istatplug/ -Iinclude/ -Itrace_reader/
-CFLAGS=-Wall -Wextra -std=gnu99 $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
+CFLAGS=-Wall -Wextra -Wno-unused-parameter -std=gnu99 $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 LDFLAGS=`pkg-config --libs glib-2.0 gsl`
 
 all: depend $(APP)

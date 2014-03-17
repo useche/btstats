@@ -81,8 +81,6 @@ static void init_oio_data(struct oio_data *oio, int n)
 
 static gboolean add_to_matrix(__u64 *__unused, struct blk_io_trace *t, struct i2c_data *i2c)
 {
-	__unused = NULL;
-
 	gsl_histogram_increment(i2c->oio[i2c->outstanding].op[IS_WRITE(t)], (double)(t->bytes/BLK_SIZE));
 
 	return FALSE;
@@ -232,8 +230,6 @@ void i2c_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *pa)
 	i2c->oio = NULL;
 	i2c->oio_size = 0;
 	i2c->oio_prev_time = UINT64_MAX;
-
-	__un1 = NULL; /* to make gcc quite */
 }
 
 void i2c_ops_init(struct plugin_ops *po)

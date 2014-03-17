@@ -38,7 +38,6 @@ static void D(struct blk_io_trace *t, void *data)
 static void R(struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_C2D(c2d,data);
-	t = NULL;
 
 	if(--c2d->outstanding == 0)
 		c2d->prospect_time = NOT_NUM;
@@ -91,8 +90,6 @@ void c2d_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un
 	c2d->min = NOT_NUM;
 	c2d->last_C = NOT_NUM;
 	c2d->prospect_time = NOT_NUM;
-
-	__un1 = NULL; __un2 = NULL; /* to make gcc quite */
 }
 
 void c2d_ops_init(struct plugin_ops *po)

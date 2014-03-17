@@ -163,8 +163,6 @@ struct trace *trace_create(const char *dev)
 
 void free_data(gpointer data, gpointer __unused) 
 {
-	__unused = NULL; /* make gcc quite */
-
 	struct trace_file *tf = (struct trace_file *)data;
 	close(tf->fd);
 	g_free(tf);

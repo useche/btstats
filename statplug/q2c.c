@@ -55,8 +55,6 @@ static gboolean proc_q(gpointer __unused, gpointer tp, gpointer pqap)
 	} else {
 		return FALSE;
 	}
-
-	__unused = NULL;
 }
 
 static void restart_ongoing(struct q2c_data *q2c)
@@ -146,9 +144,6 @@ void q2c_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un
 	
 	q2c->q2c_time = q2c->maxouts = 0;
 	q2c->q_reqs = q2c->q_total_size = 0;
-	
-	__un1 = NULL; /* to make gcc quite */
-	__un2 = NULL;
 }
 
 void q2c_ops_init(struct plugin_ops *po)
