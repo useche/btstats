@@ -12,8 +12,7 @@ TRCREAD = $(patsubst %.c,%.o,$(TRCREAD_SRCS))
 APP_DEP=$(APP).o $(PLUGS) $(TRCREAD)
 SRCS=$(APP).c $(PLUG_SRCS) $(TRCREAD_SRCS)
 
-# for some reason it does not work with gcc 4.5 or 4.6
-COMPILER=gcc-4.4
+COMPILER=gcc
 
 # If DEBUG defined, then -ggdb used
 ifdef DEBUG
@@ -35,7 +34,7 @@ all: depend $(APP)
 $(APP): | depend
 
 $(APP): $(APP_DEP)
-	$(CC) $(LDFLAGS) $(APP_DEP) -o $@
+	$(CC) $(APP_DEP) $(LDFLAGS) -o $@
 
 clean:
 	rm -rf $(APP) $(APP_DEP) .depend
