@@ -63,6 +63,4 @@ BTstats is distributed under the ISC license. You can find details in the LICENS
 More Info
 ---------
 
-You can find more info in btstats web page:
-
-    http://useche.us/fiu/btstats.md
+You can find more info in btstats web page: http://useche.us/fiu/btstats.md.
