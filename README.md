@@ -1,7 +1,7 @@
 BTstats
 =======
 
-BTstats, which stands for Block Trace Stats, is intended to extract high level
+BTstats, which stands for BlockTrace Stats, is intended to extract high level
 statistics from the traces taken with the Linux kernel blktrace tool. It is
 implemented in C and its design goal is to be easily extensible and easy to
 use.
@@ -15,8 +15,8 @@ BTstats Statistics
 ------------------
 
 In order to understand better this statistics, it is recommended to take a look
-to blktrace documentation.  Currently, BTstats already implement a couple of
-statistics that I use in my research. The following list explain each of them. 
+to blktrace documentation. Currently, BTstats already implements a couple of
+statistics that I use in my research. The following list explains each of them. 
 
 - Number of requests completed by the device.
 - Minimun, Average, and Maximun request size.
@@ -65,4 +65,4 @@ More Info
 
 You can find more info in btstats web page:
 
-	http://useche.us/~luis/fiu/btstats.mkd
+    http://useche.us/fiu/btstats.md
