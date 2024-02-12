@@ -220,7 +220,7 @@ void range_finish(struct time_range *range,
 		  char *dev)
 {
 	char head[MAX_HEAD];
-	char end_range[MAX_HEAD];
+	char end_range[MAX_HEAD / 2];
 	
 	/* adding the current plugin set to the global ps */
 	if(gps)

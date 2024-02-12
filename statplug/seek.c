@@ -1,5 +1,6 @@
 #include <asm/types.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -14,7 +15,7 @@
 
 struct seek_data 
 {
-	__s64 lastpos;
+	__u64 lastpos;
 	struct reqsize_data *req_dat;
 	
 	__u64 max;
@@ -29,13 +30,15 @@ static void C(struct blk_io_trace *t, void *data)
 	
 	__u64 blks = t_blks(t);
 	
-	if(seek->lastpos > 0) {
-		if((__u64)seek->lastpos != t->sector) {
-			__u64 distance = llabs(seek->lastpos - t->sector);
-			seek->total += distance;
-			seek->max = MAX(seek->max,distance);
-			seek->min = MIN(seek->min,distance);
-			seek->seeks++;
+	if(seek->lastpos != UINT64_MAX) {
+		if(seek->lastpos != t->sector) {
+                  __u64 distance = seek->lastpos > t->sector
+                                       ? seek->lastpos - t->sector
+                                       : t->sector - seek->lastpos;
+                  seek->total += distance;
+                  seek->max = MAX(seek->max, distance);
+                  seek->min = MIN(seek->min, distance);
+                  seek->seeks++;
 		}
 	}
 	
@@ -71,7 +74,7 @@ void seek_print_results(const void *data)
 void seek_init(struct plugin *p, struct plugin_set *ps, struct plug_args *__un)
 {
 	struct seek_data *seek = p->data = g_new0(struct seek_data,1);
-	seek->lastpos = -1;
+	seek->lastpos = UINT64_MAX;
 	seek->max = 0;
 	seek->min = ~0;
 	seek->total = 0;
