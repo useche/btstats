@@ -7,3 +7,6 @@ edition = "2021"
 
 [build-dependencies]
 bindgen = "0.69.4"
+
+[dev-dependencies]
+tempfile = "3"

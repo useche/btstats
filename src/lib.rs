@@ -1,4 +1,8 @@
-use std::io::{self, Read};
+use std::io::{self, Read, Seek, SeekFrom};
+use std::fs::{self, File};
+use std::path::Path;
+use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 
 mod bindings {
     #![allow(dead_code)]
@@ -16,31 +20,123 @@ const fn BLK_TC_ACT(act: u32) -> u32 {
 }
 const __BLK_TA_QUEUE: u32 = 1;
 
-pub struct TraceReader<R: Read> {
-    reader: R,
+// A struct to hold the state for a single trace file
+struct TraceFile {
+    file: File,
+    event: blk_io_trace,
+}
+
+// A wrapper for the heap to allow min-heap behavior
+struct HeapItem(TraceFile);
+
+impl Ord for HeapItem {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Invert the comparison to make it a min-heap
+        other.0.event.time.cmp(&self.0.event.time)
+    }
+}
+
+impl PartialOrd for HeapItem {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for HeapItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.event.time == other.0.event.time
+    }
+}
+
+impl Eq for HeapItem {}
+
+
+pub struct TraceReader {
+    heap: BinaryHeap<HeapItem>,
+    genesis: u64,
     native_trace: i32,
 }
 
-impl<R: Read> TraceReader<R> {
-    pub fn new(reader: R) -> Self {
-        TraceReader {
-            reader,
-            native_trace: -1,
+impl TraceReader {
+    pub fn new(device_path: &str) -> Result<Self, io::Error> {
+        let path = Path::new(device_path);
+        let dir = path.parent().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid device path"))?;
+        let basename = path.file_name().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid device path"))?.to_str().unwrap();
+        let prefix = format!("{}.blktrace.", basename);
+
+        let mut files = Vec::new();
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                    if filename.starts_with(&prefix) {
+                        files.push(path.to_path_buf());
+                    }
+                }
+            }
         }
+
+        if files.is_empty() {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "No trace files found"));
+        }
+
+        let mut native_trace = -1;
+        let mut heap = BinaryHeap::new();
+
+        for path in files {
+            let mut file = File::open(&path)?;
+            if let Some(event) = read_next_event(&mut file, &mut native_trace)? {
+                heap.push(HeapItem(TraceFile { file, event }));
+            }
+        }
+
+        let genesis = heap.peek().map_or(0, |item| item.0.event.time);
+
+        // Adjust timestamps relative to genesis
+        let mut adjusted_heap = BinaryHeap::new();
+        while let Some(mut item) = heap.pop() {
+            item.0.event.time -= genesis;
+            adjusted_heap.push(item);
+        }
+
+        Ok(TraceReader {
+            heap: adjusted_heap,
+            genesis,
+            native_trace,
+        })
     }
 
     pub fn read_trace(&mut self) -> Result<Option<blk_io_trace>, io::Error> {
+        if let Some(mut item) = self.heap.pop() {
+            let event_to_return = item.0.event;
+
+            if let Some(next_event) = read_next_event(&mut item.0.file, &mut self.native_trace)? {
+                item.0.event = next_event;
+                item.0.event.time -= self.genesis;
+                self.heap.push(item);
+            }
+
+            Ok(Some(event_to_return))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+fn read_next_event(file: &mut File, native_trace: &mut i32) -> Result<Option<blk_io_trace>, io::Error> {
+    loop {
         let mut trace_buf = [0u8; std::mem::size_of::<blk_io_trace>()];
 
-        match self.reader.read_exact(&mut trace_buf) {
+        match file.read_exact(&mut trace_buf) {
             Ok(()) => {
                 let mut trace: blk_io_trace = unsafe { std::mem::transmute(trace_buf) };
 
-                if self.native_trace == -1 {
-                    self.native_trace = check_data_endianness(trace.magic);
+                if *native_trace == -1 {
+                    *native_trace = check_data_endianness(trace.magic);
                 }
 
-                if self.native_trace == 0 {
+                if *native_trace == 0 {
                     correct_endianness(&mut trace);
                 }
 
@@ -48,13 +144,26 @@ impl<R: Read> TraceReader<R> {
                     return Err(io::Error::new(io::ErrorKind::InvalidData, "Bad trace magic"));
                 }
 
-                Ok(Some(trace))
+                if trace.pdu_len > 0 {
+                    file.seek(SeekFrom::Current(trace.pdu_len as i64))?;
+                }
+
+                if !not_real_event(&trace) {
+                    return Ok(Some(trace));
+                }
             }
-            Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
-            Err(e) => Err(e),
+            Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+            Err(e) => return Err(e),
         }
     }
 }
+
+fn not_real_event(t: &blk_io_trace) -> bool {
+    (t.action & BLK_TC_ACT(BLK_TC_NOTIFY)) != 0 ||
+    (t.action & BLK_TC_ACT(BLK_TC_DISCARD)) != 0 ||
+    (t.action & BLK_TC_ACT(BLK_TC_DRV_DATA)) != 0
+}
+
 
 fn check_data_endianness(magic: u32) -> i32 {
     if (magic & 0xffffff00) as u32 == BLK_IO_TRACE_MAGIC {
@@ -132,13 +241,14 @@ pub fn format_trace(trace: &blk_io_trace) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
+    use std::io::Write;
+    use tempfile::tempdir;
 
-    fn get_test_trace() -> blk_io_trace {
+    fn get_test_trace(sequence: u32, time: u64) -> blk_io_trace {
         blk_io_trace {
             magic: BLK_IO_TRACE_MAGIC | BLK_IO_TRACE_VERSION,
-            sequence: 1,
-            time: 1234567890,
+            sequence,
+            time,
             sector: 1024,
             bytes: 4096,
             action: (__BLK_TA_QUEUE | BLK_TC_ACT(BLK_TC_WRITE)),
@@ -151,42 +261,34 @@ mod tests {
     }
 
     #[test]
-    fn test_read_native_endian() {
-        let trace = get_test_trace();
-        let bytes: [u8; std::mem::size_of::<blk_io_trace>()] = unsafe { std::mem::transmute(trace) };
+    fn test_multi_file_reading() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
 
-        let cursor = Cursor::new(&bytes[..]);
-        let mut reader = TraceReader::new(cursor);
-        let result = reader.read_trace().unwrap().unwrap();
+        // Create file 1
+        let trace1 = get_test_trace(1, 200);
+        let mut file1 = fs::File::create(path.join("test.blktrace.0")).unwrap();
+        file1.write_all(&unsafe { std::mem::transmute::<_, [u8; 48]>(trace1) }).unwrap();
 
-        // The result should be the same as the original, assuming the host endianness matches the trace
-        assert_eq!(result.magic, get_test_trace().magic);
-        assert_eq!(result.sequence, get_test_trace().sequence);
-        assert_eq!(result.time, get_test_trace().time);
-    }
+        let trace2 = get_test_trace(2, 100);
+        let mut file2 = fs::File::create(path.join("test.blktrace.1")).unwrap();
+        file2.write_all(&unsafe { std::mem::transmute::<_, [u8; 48]>(trace2) }).unwrap();
 
-    #[test]
-    fn test_read_swapped_endian() {
-        let mut trace = get_test_trace();
-        // create a byte-swapped version of the trace
-        correct_endianness(&mut trace);
-        let bytes: [u8; std::mem::size_of::<blk_io_trace>()] = unsafe { std::mem::transmute(trace) };
+        let mut reader = TraceReader::new(path.join("test").to_str().unwrap()).unwrap();
 
-        let cursor = Cursor::new(&bytes[..]);
-        let mut reader = TraceReader::new(cursor);
-        let result = reader.read_trace().unwrap().unwrap();
+        let event1 = reader.read_trace().unwrap().unwrap();
+        assert_eq!(event1.sequence, 2); // from file 2, time 100
 
-        // The result should be correctly parsed back to the original native values
-        assert_eq!(result.magic, get_test_trace().magic);
-        assert_eq!(result.sequence, get_test_trace().sequence);
-        assert_eq!(result.time, get_test_trace().time);
+        let event2 = reader.read_trace().unwrap().unwrap();
+        assert_eq!(event2.sequence, 1); // from file 1, time 200
+
+        assert!(reader.read_trace().unwrap().is_none());
     }
 
     #[test]
     fn test_format() {
-        let trace = get_test_trace();
+        let trace = get_test_trace(1, 1234567890);
         let formatted = format_trace(&trace);
         assert_eq!(formatted, "2,123 1 1.234567890 Q W 0 1024 + 4096");
     }
-
 }
