@@ -20,39 +20,59 @@ const fn BLK_TC_ACT(act: u32) -> u32 {
 }
 const __BLK_TA_QUEUE: u32 = 1;
 
-// A struct to hold the state for a single trace file
 struct TraceFile {
     file: File,
-    event: blk_io_trace,
 }
 
 impl TraceFile {
-    fn new(path: &Path, native_trace: &mut i32) -> Result<Option<Self>, io::Error> {
-        let mut file = File::open(path)?;
-        match read_next_event_from_file(&mut file, native_trace)? {
-            Some(event) => Ok(Some(TraceFile { file, event })),
-            None => Ok(None),
-        }
+    fn new(path: &Path) -> Result<Self, io::Error> {
+        let file = File::open(path)?;
+        Ok(TraceFile { file })
     }
 
-    fn update(&mut self, native_trace: &mut i32) -> Result<bool, io::Error> {
-        match read_next_event_from_file(&mut self.file, native_trace)? {
-            Some(event) => {
-                self.event = event;
-                Ok(true)
+    fn next_event(&mut self, native_trace: &mut i32) -> Result<Option<blk_io_trace>, io::Error> {
+        loop {
+            let mut trace_buf = [0u8; std::mem::size_of::<blk_io_trace>()];
+
+            match self.file.read_exact(&mut trace_buf) {
+                Ok(()) => {
+                    let mut trace: blk_io_trace = unsafe { std::mem::transmute(trace_buf) };
+
+                    if *native_trace == -1 {
+                        *native_trace = check_data_endianness(trace.magic);
+                    }
+
+                    if *native_trace == 0 {
+                        correct_endianness(&mut trace);
+                    }
+
+                    if (trace.magic & 0xffffff00) as u32 != BLK_IO_TRACE_MAGIC {
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, "Bad trace magic"));
+                    }
+
+                    if trace.pdu_len > 0 {
+                        self.file.seek(SeekFrom::Current(trace.pdu_len as i64))?;
+                    }
+
+                    if !not_real_event(&trace) {
+                        return Ok(Some(trace));
+                    }
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+                Err(e) => return Err(e),
             }
-            None => Ok(false),
         }
     }
 }
 
-// A wrapper for the heap to allow min-heap behavior
-struct HeapItem(TraceFile);
+struct HeapItem {
+    event: blk_io_trace,
+    trace_file: TraceFile,
+}
 
 impl Ord for HeapItem {
     fn cmp(&self, other: &Self) -> Ordering {
-        // Invert the comparison to make it a min-heap
-        other.0.event.time.cmp(&self.0.event.time)
+        other.event.time.cmp(&self.event.time)
     }
 }
 
@@ -64,12 +84,11 @@ impl PartialOrd for HeapItem {
 
 impl PartialEq for HeapItem {
     fn eq(&self, other: &Self) -> bool {
-        self.0.event.time == other.0.event.time
+        self.event.time == other.event.time
     }
 }
 
 impl Eq for HeapItem {}
-
 
 pub struct TraceReader {
     heap: BinaryHeap<HeapItem>,
@@ -105,17 +124,18 @@ impl TraceReader {
         let mut heap = BinaryHeap::new();
 
         for path in files {
-            if let Some(trace_file) = TraceFile::new(&path, &mut native_trace)? {
-                heap.push(HeapItem(trace_file));
+            let mut trace_file = TraceFile::new(&path)?;
+            if let Some(event) = trace_file.next_event(&mut native_trace)? {
+                heap.push(HeapItem { event, trace_file });
             }
         }
 
-        let genesis = heap.peek().map_or(0, |item| item.0.event.time);
+        let genesis = heap.peek().map_or(0, |item| item.event.time);
 
         // Adjust timestamps relative to genesis
         let mut adjusted_heap = BinaryHeap::new();
         while let Some(mut item) = heap.pop() {
-            item.0.event.time -= genesis;
+            item.event.time -= genesis;
             adjusted_heap.push(item);
         }
 
@@ -128,10 +148,11 @@ impl TraceReader {
 
     pub fn read_trace(&mut self) -> Result<Option<blk_io_trace>, io::Error> {
         if let Some(mut item) = self.heap.pop() {
-            let event_to_return = item.0.event;
+            let event_to_return = item.event;
 
-            if item.0.update(&mut self.native_trace)? {
-                item.0.event.time -= self.genesis;
+            if let Some(next_event) = item.trace_file.next_event(&mut self.native_trace)? {
+                item.event = next_event;
+                item.event.time -= self.genesis;
                 self.heap.push(item);
             }
 
@@ -142,46 +163,11 @@ impl TraceReader {
     }
 }
 
-fn read_next_event_from_file(file: &mut File, native_trace: &mut i32) -> Result<Option<blk_io_trace>, io::Error> {
-    loop {
-        let mut trace_buf = [0u8; std::mem::size_of::<blk_io_trace>()];
-
-        match file.read_exact(&mut trace_buf) {
-            Ok(()) => {
-                let mut trace: blk_io_trace = unsafe { std::mem::transmute(trace_buf) };
-
-                if *native_trace == -1 {
-                    *native_trace = check_data_endianness(trace.magic);
-                }
-
-                if *native_trace == 0 {
-                    correct_endianness(&mut trace);
-                }
-
-                if (trace.magic & 0xffffff00) as u32 != BLK_IO_TRACE_MAGIC {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, "Bad trace magic"));
-                }
-
-                if trace.pdu_len > 0 {
-                    file.seek(SeekFrom::Current(trace.pdu_len as i64))?;
-                }
-
-                if !not_real_event(&trace) {
-                    return Ok(Some(trace));
-                }
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
-            Err(e) => return Err(e),
-        }
-    }
-}
-
 fn not_real_event(t: &blk_io_trace) -> bool {
     (t.action & BLK_TC_ACT(BLK_TC_NOTIFY)) != 0 ||
     (t.action & BLK_TC_ACT(BLK_TC_DISCARD)) != 0 ||
     (t.action & BLK_TC_ACT(BLK_TC_DRV_DATA)) != 0
 }
-
 
 fn check_data_endianness(magic: u32) -> i32 {
     if (magic & 0xffffff00) as u32 == BLK_IO_TRACE_MAGIC {
