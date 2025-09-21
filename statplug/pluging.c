@@ -73,7 +73,8 @@ void pluging_print_results(const void *data)
 void pluging_init(struct plugin *p, struct plugin_set *__un1,
 		  struct plug_args *__un2)
 {
-	struct pluging_data *plug = p->data = g_new(struct pluging_data, 1);
+	p->data = g_new(struct pluging_data, 1);
+	struct pluging_data *plug = static_cast<struct pluging_data*>(p->data);
 
 	plug->min = ~0;
 	plug->max = 0;
@@ -87,9 +88,9 @@ void pluging_ops_init(struct plugin_ops *po)
 	po->add = pluging_add;
 	po->print_results = pluging_print_results;
 
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_PLUG, P);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_UNPLUG_IO, U);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_UNPLUG_TIMER, U);
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_PLUG, reinterpret_cast<gpointer>(P));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_UNPLUG_IO, reinterpret_cast<gpointer>(U));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_UNPLUG_TIMER, reinterpret_cast<gpointer>(U));
 }
 
 void pluging_destroy(struct plugin *p)

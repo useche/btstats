@@ -12,7 +12,7 @@ TRCREAD = $(patsubst %.c,%.o,$(TRCREAD_SRCS))
 APP_DEP=$(APP).o $(PLUGS) $(TRCREAD)
 SRCS=$(APP).c $(PLUG_SRCS) $(TRCREAD_SRCS)
 
-COMPILER=gcc
+COMPILER=g++
 
 # If DEBUG defined, then -ggdb used
 ifdef DEBUG
@@ -26,7 +26,7 @@ endef
 endif
 
 INCLUDE=`pkg-config --cflags glib-2.0` -I. -Istatplug/ -Iinclude/ -Itrace_reader/
-CFLAGS=-Wall -Wextra -Werror -Wno-unused-parameter -std=gnu99 $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
+CFLAGS=-Wall -Wextra -Werror -Wno-unused-parameter -std=c++20 $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -fpermissive
 LDFLAGS=`pkg-config --libs glib-2.0 gsl`
 
 all: depend $(APP)

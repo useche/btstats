@@ -52,7 +52,7 @@ inline static int comp_int64(gconstpointer a, gconstpointer b)
 		return x > y ? 1 : -1;
 }
 
-inline static void get_filename(char *filename, char *suffix, char *param,
+inline static void get_filename(char *filename, const char *suffix, const char *param,
 				__u64 end_range)
 {
 	if (end_range == G_MAXUINT64)

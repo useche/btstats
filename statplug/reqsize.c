@@ -52,7 +52,8 @@ void reqsize_print_results(const void *data)
 void reqsize_init(struct plugin *p, struct plugin_set *__un1,
 		  struct plug_args *__un2)
 {
-	struct reqsize_data *req = p->data = g_new(struct reqsize_data, 1);
+	p->data = g_new(struct reqsize_data, 1);
+	struct reqsize_data *req = static_cast<struct reqsize_data*>(p->data);
 	req->min = ~0;
 	req->max = 0;
 	req->total_size = 0;
@@ -66,7 +67,7 @@ void reqsize_ops_init(struct plugin_ops *po)
 	po->print_results = reqsize_print_results;
 
 	/* association of event int and function */
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, C);
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, reinterpret_cast<gpointer>(C));
 }
 
 void reqsize_destroy(struct plugin *p)

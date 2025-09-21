@@ -93,8 +93,8 @@ void parse_file(char *filename, struct args *a)
 						    DOUBLE_TO_NANO_ULL(end);
 
 				dev = curdev;
-				ranges = g_hash_table_lookup(a->devs_ranges,
-							     dev);
+				ranges = static_cast<GArray*>(g_hash_table_lookup(a->devs_ranges,
+							     dev));
 
 				if (!ranges) {
 					dev = g_strdup(curdev);
@@ -143,7 +143,7 @@ void parse_dev_str(char **devs, struct args *a)
 		r.end = d_end == -1 ? G_MAXUINT64 : DOUBLE_TO_NANO_ULL(d_end);
 
 		dev = dev_pair[0];
-		ranges = g_hash_table_lookup(a->devs_ranges, dev);
+		ranges = static_cast<GArray*>(g_hash_table_lookup(a->devs_ranges, dev));
 
 		if (!ranges) {
 			dev = g_strdup(dev_pair[0]);
@@ -288,8 +288,8 @@ void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps,
 
 void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer ar)
 {
-	char *dev = dev_arg;
-	GArray *ranges = ranges_arg;
+	char *dev = static_cast<char *>(dev_arg);
+	GArray *ranges = static_cast<GArray *>(ranges_arg);
 	struct plugin_set *global_plugin = ((struct analyze_args *)ar)->ps;
 	struct plug_args *pa = ((struct analyze_args *)ar)->pa;
 	trace_reader_t rdr = ((struct analyze_args *)ar)->reader;
