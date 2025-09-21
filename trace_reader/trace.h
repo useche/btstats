@@ -2,32 +2,35 @@
 #define _TRACE_H_
 
 #include <blktrace_api.h>
-#include <glib.h>
+#include "include/bsd/queue.h"
 
 struct trace_file 
 {
 	struct blk_io_trace t;
 	int fd;
-	gboolean eof;
+	int eof;
+    SLIST_ENTRY(trace_file) entries;
 };
+
+SLIST_HEAD(trace_file_list, trace_file);
 
 struct trace 
 {
-	GSList *files;
+	struct trace_file_list *files;
 	__u64 genesis;
 };
 
-typedef gboolean (*trace_reader_t)(const struct trace *, struct blk_io_trace *);
+typedef int (*trace_reader_t)(const struct trace *, struct blk_io_trace *);
 
 /* constructor and destructor */
 struct trace *trace_create(const char *dev);
 void trace_destroy(struct trace *dt);
 
 /* default trace reader */
-gboolean trace_read_next(const struct trace *dt, struct blk_io_trace *t);
+int trace_read_next(const struct trace *dt, struct blk_io_trace *t);
 
 /* reader for devices with ata_piix controller */
-gboolean trace_ata_piix_read_next(const struct trace *dt, struct blk_io_trace *t);
+int trace_ata_piix_read_next(const struct trace *dt, struct blk_io_trace *t);
 
 /*
  * 0 - default reader

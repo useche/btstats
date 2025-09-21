@@ -1,5 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <plugins.h>
 #include <blktrace_api.h>
@@ -8,6 +10,8 @@
 
 #include <reqsize.h>
 #include <list_plugins.h>
+#include "include/vector.h"
+#include "include/sector_tree.h"
 
 #define DECL_ASSIGN_D2C(name,data)			\
 	struct d2c_data *name = (struct d2c_data *)data
@@ -17,9 +21,9 @@ struct d2c_data
 	__u32 outstanding;
 	__u32 processed;
 	
-	GTree *prospect_ds;
-	GArray *dtimes;
-	GArray *ctimes;
+	struct sector_tree_head *prospect_ds;
+	vector *dtimes;
+	vector *ctimes;
 
 	__u64 d2ctime;
 
@@ -30,36 +34,51 @@ struct d2c_data
 	FILE *detail_f;
 };
 
-static void D(struct blk_io_trace *t, void *data)
+static void D(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_D2C(d2c,data);
 	
 	__u64 blks = t_blks(t);
+	struct sector_entry find, *res;
+    find.sector = t->sector;
 	
-	if(blks && g_tree_lookup(d2c->prospect_ds,&t->sector)==NULL) {
+	res = RB_FIND(sector_tree_head, d2c->prospect_ds, &find);
+	if(blks && res == NULL) {
 		DECL_DUP(struct blk_io_trace,new_t,t);
-		g_tree_insert(d2c->prospect_ds,&new_t->sector,new_t);
+        struct sector_entry *new_se = malloc(sizeof(struct sector_entry));
+        new_se->sector = new_t->sector;
+        new_se->trace = new_t;
+		RB_INSERT(sector_tree_head, d2c->prospect_ds, new_se);
 		d2c->outstanding++;
 	}
 }
 
-static void __account_reqs(struct d2c_data *d2c, gboolean finished) 
+static int comp_u64(const void *a, const void *b)
+{
+    const __u64 *ua = a;
+    const __u64 *ub = b;
+    if (*ua < *ub) return -1;
+    if (*ua > *ub) return 1;
+    return 0;
+}
+
+static void __account_reqs(struct d2c_data *d2c, int finished)
 {
 	d2c->outstanding--;
 	if(d2c->outstanding == 0 || finished) {
 		if(d2c->processed > 0) {
-			unsigned i, j;
+			unsigned int i, j;
 			__u32 outs, maxouts;
 			
 			__u64 start, end;
 			
-			g_array_sort(d2c->ctimes,comp_int64);
-			g_array_sort(d2c->dtimes,comp_int64);
+			qsort(d2c->ctimes->data, vector_total(d2c->ctimes), sizeof(__u64), comp_u64);
+			qsort(d2c->dtimes->data, vector_total(d2c->dtimes), sizeof(__u64), comp_u64);
 
 			i = j = maxouts = outs = 0;
-			while(i < d2c->dtimes->len) {
-				if(g_array_index(d2c->dtimes,__u64,i) <
-				   g_array_index(d2c->ctimes,__u64,j)) {
+			while(i < (unsigned int)vector_total(d2c->dtimes)) {
+				if(*((__u64*)vector_get(d2c->dtimes,i)) <
+				   *((__u64*)vector_get(d2c->ctimes,j))) {
 					outs++;
 					maxouts = MAX(outs,maxouts);
 					i++;
@@ -72,8 +91,8 @@ static void __account_reqs(struct d2c_data *d2c, gboolean finished)
 			d2c->maxouts = MAX(d2c->maxouts,maxouts);
 			
 			/* getting d2c time */
-			start = g_array_index(d2c->dtimes,__u64,0);
-			end = g_array_index(d2c->ctimes,__u64,d2c->ctimes->len - 1);
+			start = *((__u64*)vector_get(d2c->dtimes,0));
+			end = *((__u64*)vector_get(d2c->ctimes, vector_total(d2c->ctimes) - 1));
 
 			/* adding total time */
 			d2c->d2ctime += end - start;
@@ -82,27 +101,26 @@ static void __account_reqs(struct d2c_data *d2c, gboolean finished)
 			d2c->processed = 0;
 			
 			/* empty arrays */
-			g_array_remove_range(d2c->dtimes,
-					     0,
-					     d2c->dtimes->len);
-			g_array_remove_range(d2c->ctimes,
-					     0,
-					     d2c->ctimes->len);
+			vector_remove_range(d2c->dtimes, 0, vector_total(d2c->dtimes));
+			vector_remove_range(d2c->ctimes, 0, vector_total(d2c->ctimes));
 		}
 		
 		assert(d2c->processed == 0);
-		assert(d2c->dtimes->len == 0 && d2c->ctimes->len == 0);
+		assert(vector_total(d2c->dtimes) == 0 && vector_total(d2c->ctimes) == 0);
 	}
 }
 
-static void C(struct blk_io_trace *t, void *data)
+static void C(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_D2C(d2c,data);
 	
 	__u64 blks = t_blks(t);
-	struct blk_io_trace *dtrace = g_tree_lookup(d2c->prospect_ds,&t->sector);
+	struct sector_entry find, *dtrace_entry;
+    find.sector = t->sector;
+	dtrace_entry = RB_FIND(sector_tree_head, d2c->prospect_ds, &find);
 	
-	if(blks && dtrace) {
+	if(blks && dtrace_entry) {
+        struct blk_io_trace *dtrace = dtrace_entry->trace;
 		if(dtrace->bytes == t->bytes) {
 			int e;
 
@@ -112,36 +130,41 @@ static void C(struct blk_io_trace *t, void *data)
 			if(d2c->detail_f) {
 				e = fprintf(d2c->detail_f,"%f %llu %llu %f\n",
 					NANO_ULL_TO_DOUBLE(t->time),
-					t->sector,
-					blks,
+					(long long unsigned int)t->sector,
+					(long long unsigned int)blks,
 					NANO_ULL_TO_DOUBLE(t->time - dtrace->time));
 				if(e < 0) error_exit("Error writing D2C detail file\n");
 			}
 			
-			g_array_append_val(d2c->dtimes,dtrace->time);
-			g_array_append_val(d2c->ctimes,t->time);
+			vector_add(d2c->dtimes, &dtrace->time);
+			vector_add(d2c->ctimes, (void*)&t->time);
 		}
 		
-		g_tree_remove(d2c->prospect_ds,&dtrace->sector);
-		g_free(dtrace);
+		RB_REMOVE(sector_tree_head, d2c->prospect_ds, dtrace_entry);
+		free(dtrace);
+        free(dtrace_entry);
 		
-		__account_reqs(d2c, FALSE);
+		__account_reqs(d2c, 0);
 	}
 }
 
-static void R(struct blk_io_trace *t, void *data)
+static void R(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_D2C(d2c,data);
 	
-	struct blk_io_trace *dtrace = g_tree_lookup(d2c->prospect_ds,&t->sector);
+	struct sector_entry find, *dtrace_entry;
+    find.sector = t->sector;
+	dtrace_entry = RB_FIND(sector_tree_head, d2c->prospect_ds, &find);
 
-	if(dtrace) {
+	if(dtrace_entry) {
+        struct blk_io_trace *dtrace = dtrace_entry->trace;
 		assert(dtrace->bytes == t->bytes);
 		
-		g_tree_remove(d2c->prospect_ds,&dtrace->sector);
-		g_free(dtrace);		
+		RB_REMOVE(sector_tree_head, d2c->prospect_ds, dtrace_entry);
+		free(dtrace);
+        free(dtrace_entry);
 
-		__account_reqs(d2c, FALSE);
+		__account_reqs(d2c, 0);
 	}
 }
 
@@ -157,7 +180,7 @@ void d2c_print_results(const void *data)
 {
 	DECL_ASSIGN_D2C(d2c,data);
 	
-	__account_reqs(d2c, TRUE);
+	__account_reqs(d2c, 1);
 
 	if(d2c->d2ctime > 0) {
 		double t_time_msec = ((double)d2c->d2ctime)/1e6;
@@ -180,14 +203,17 @@ void d2c_print_results(const void *data)
 void d2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *pia)
 {
 	char filename[FILENAME_MAX];
-	struct d2c_data *d2c = p->data = g_new(struct d2c_data,1);
+	struct d2c_data *d2c = p->data = malloc(sizeof(struct d2c_data));
 
 	d2c->outstanding = d2c->processed = 0;
 	d2c->d2ctime = d2c->maxouts = 0;
 
-	d2c->prospect_ds = g_tree_new(comp_int64);
-	d2c->dtimes = g_array_sized_new(FALSE,FALSE,sizeof(__u64),TENT_OUTS_RQS);
-	d2c->ctimes = g_array_sized_new(FALSE,FALSE,sizeof(__u64),TENT_OUTS_RQS);
+	d2c->prospect_ds = malloc(sizeof(struct sector_tree_head));
+    RB_INIT(sector_tree_head, d2c->prospect_ds);
+	d2c->dtimes = malloc(sizeof(vector));
+    vector_init(d2c->dtimes, sizeof(__u64));
+	d2c->ctimes = malloc(sizeof(vector));
+    vector_init(d2c->ctimes, sizeof(__u64));
 	d2c->req_dat = ps->plugs[REQ_SIZE_IND].data;
 	
 	/* open d2c detail file */
@@ -203,12 +229,20 @@ void d2c_destroy(struct plugin *p)
 {
 	DECL_ASSIGN_D2C(d2c,p->data);
 	
-	g_tree_destroy(d2c->prospect_ds);
-	g_array_free(d2c->dtimes,FALSE);
-	g_array_free(d2c->ctimes,FALSE);
+    struct sector_entry *se, *next;
+    RB_FOREACH_SAFE(se, sector_tree_head, d2c->prospect_ds, next) {
+        RB_REMOVE(sector_tree_head, d2c->prospect_ds, se);
+        free(se->trace);
+        free(se);
+    }
+    free(d2c->prospect_ds);
+	vector_free(d2c->dtimes);
+    free(d2c->dtimes);
+	vector_free(d2c->ctimes);
+    free(d2c->ctimes);
 	if(d2c->detail_f)
 		fclose(d2c->detail_f);
-	g_free(p->data);
+	free(p->data);
 }
 
 void d2c_ops_init(struct plugin_ops *po)
@@ -216,7 +250,18 @@ void d2c_ops_init(struct plugin_ops *po)
 	po->add = d2c_add;
 	po->print_results = d2c_print_results;
 	
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_COMPLETE,C);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_ISSUE,D);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_REQUEUE,R);
+    struct event_entry *e1 = malloc(sizeof(struct event_entry));
+    e1->event_key = __BLK_TA_COMPLETE;
+    e1->event_handler = (event_func_t)C;
+	RB_INSERT(event_tree_head, po->event_tree, e1);
+
+    struct event_entry *e2 = malloc(sizeof(struct event_entry));
+    e2->event_key = __BLK_TA_ISSUE;
+    e2->event_handler = (event_func_t)D;
+	RB_INSERT(event_tree_head, po->event_tree, e2);
+
+    struct event_entry *e3 = malloc(sizeof(struct event_entry));
+    e3->event_key = __BLK_TA_REQUEUE;
+    e3->event_handler = (event_func_t)R;
+	RB_INSERT(event_tree_head, po->event_tree, e3);
 }

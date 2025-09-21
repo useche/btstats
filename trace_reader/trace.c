@@ -1,7 +1,6 @@
 #include <trace.h>
 
-#include <glib.h>
-#include <utils.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <libgen.h>
@@ -16,6 +15,7 @@
 
 #include <blktrace.h>
 #include <blktrace_api.h>
+#include "utils.h"
 
 #define CORRECT_ENDIAN(v)					\
 	do {							\
@@ -29,11 +29,8 @@
 
 static int native_trace = -1;
 
-void min_time(gpointer data, gpointer min)
+void min_time(struct trace_file *tf, struct trace_file **mintf)
 {
-	struct trace_file *tf = (struct trace_file *)data;
-	struct trace_file **mintf = (struct trace_file **)min;
-
 	if(!tf->eof) {
 		if(!(*mintf)) {
 			*mintf = tf;
@@ -44,15 +41,12 @@ void min_time(gpointer data, gpointer min)
 	}
 }
 
-void correct_time(gpointer data, gpointer dt_arg)
+void correct_time(struct trace_file *tf, struct trace *dt)
 {
-	struct trace_file *tf = (struct trace_file *)data;
-	struct trace *dt = (struct trace *)dt_arg;
-	
 	tf->t.time -= dt->genesis;
 }
 
-gboolean not_real_event(struct blk_io_trace *t)
+int not_real_event(struct blk_io_trace *t)
 {
 	return	(t->action & BLK_TC_ACT(BLK_TC_NOTIFY))	||
 		(t->action & BLK_TC_ACT(BLK_TC_DISCARD))||
@@ -66,7 +60,7 @@ void read_next(struct trace_file *tf, __u64 genesis)
 	do {
 		e = read(tf->fd,&tf->t,sizeof(struct blk_io_trace));
 		if(e==0) {
-			tf->eof = TRUE;
+			tf->eof = 1;
 			break;
 		} else if(e==-1 || e!=sizeof(struct blk_io_trace)) {
 			perror_exit("Reading trace\n");
@@ -126,26 +120,34 @@ void find_input_traces(struct trace *trace, const char *dev)
 	sprintf(pre_trace,"%s.blktrace.",basen);
 	while((d = readdir(cur_dir))) {
 		if(strstr(d->d_name,pre_trace)==d->d_name) {
-			tf = g_new(struct trace_file,1);
-			trace->files = g_slist_prepend(trace->files,tf);
+			tf = malloc(sizeof(struct trace_file));
+            SLIST_INSERT_HEAD(trace->files, tf, entries);
 			
 			sprintf(file_path,"%s/%s", dirn, d->d_name);
 
 			tf->fd = open(file_path,O_RDONLY);
 			if(tf->fd<0) perror_exit("Opening tracefile");
 			
-			tf->eof = FALSE;
+			tf->eof = 0;
 			
 			read_next(tf,0);
 		}
 	}
 	
-	if(g_slist_length(trace->files)==0)
+    int count = 0;
+    SLIST_FOREACH(tf, trace->files, entries) {
+        count++;
+    }
+	if(count == 0)
 		error_exit("No such traces: %s\n", dev);
 
-	g_slist_foreach(trace->files,min_time,&min);
+    SLIST_FOREACH(tf, trace->files, entries) {
+        min_time(tf, &min);
+    }
 	trace->genesis = min->t.time;
-	g_slist_foreach(trace->files,correct_time,trace);
+    SLIST_FOREACH(tf, trace->files, entries) {
+        correct_time(tf, trace);
+    }
 	
 	closedir(cur_dir);
 	free(basec);
@@ -154,39 +156,46 @@ void find_input_traces(struct trace *trace, const char *dev)
 
 struct trace *trace_create(const char *dev)
 {
-	struct trace *dt = g_new(struct trace,1);
-	dt->files = NULL;	
+	struct trace *dt = malloc(sizeof(struct trace));
+	dt->files = malloc(sizeof(struct trace_file_list));
+    SLIST_INIT(dt->files);
 	find_input_traces(dt,dev);
 	
 	return dt;
 }
 
-void free_data(gpointer data, gpointer __unused) 
+void free_data(struct trace_file *tf)
 {
-	struct trace_file *tf = (struct trace_file *)data;
 	close(tf->fd);
-	g_free(tf);
+	free(tf);
 }
 
 void trace_destroy(struct trace *dt) 
 {
-	g_slist_foreach(dt->files,free_data,NULL);
-	g_slist_free(dt->files);
-	g_free(dt);
+    struct trace_file *tf;
+    while(!SLIST_EMPTY(dt->files)) {
+        tf = SLIST_FIRST(dt->files);
+        SLIST_REMOVE_HEAD(dt->files, entries);
+        free_data(tf);
+    }
+	free(dt->files);
+	free(dt);
 }
 
-gboolean trace_read_next(const struct trace *dt, struct blk_io_trace *t) 
+int trace_read_next(const struct trace *dt, struct blk_io_trace *t)
 {
 	struct trace_file *min = NULL;
-	
-	g_slist_foreach(dt->files,min_time,&min);
+	struct trace_file *tf;
+
+    SLIST_FOREACH(tf, dt->files, entries) {
+        min_time(tf, &min);
+    }
 	
 	if(!min)
-		return FALSE;
+		return 0;
 	else {
 		*t = min->t;
 		read_next(min, dt->genesis);
-		return TRUE;
+		return 1;
 	}
 }
-

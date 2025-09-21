@@ -1,20 +1,22 @@
 #include <asm/types.h>
-#include <glib.h>
 #include <stdio.h>
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
 #include <plugins.h>
 #include <utils.h>
 #include <list_plugins.h>
+#include "include/hash.h"
 
 #define DECL_ASSIGN_Q2C(name,data)				\
 	struct q2c_data *name = (struct q2c_data *)data
 
 struct q2c_data 
 {
-	GHashTable *qs;
+	hash_table *qs;
 
 	/* ongoing active period */
 	__u64 start;
@@ -38,9 +40,9 @@ struct proc_q_arg
 	struct q2c_data *q2c;
 };
 
-static gboolean proc_q(gpointer __unused, gpointer tp, gpointer pqap)
+static int proc_q(void *key, void *value, void *pqap)
 {
-	struct blk_io_trace *t = (struct blk_io_trace *)tp;
+	struct blk_io_trace *t = (struct blk_io_trace *)value;
 	struct proc_q_arg *pqa = (struct proc_q_arg *)pqap;
 
 	__u64 this_s = BIT_START(t), this_e = BIT_END(t);
@@ -51,9 +53,9 @@ static gboolean proc_q(gpointer __unused, gpointer tp, gpointer pqap)
 			pqa->q2c->start = this_ts;
 		pqa->q2c->processed++;
 		pqa->q2c->outstanding--;
-		return TRUE;
+		return 1;
 	} else {
-		return FALSE;
+		return 0;
 	}
 }
 
@@ -65,7 +67,7 @@ static void restart_ongoing(struct q2c_data *q2c)
 		q2c->processed = 0;
 }
 
-static void C(struct blk_io_trace *t, void *data)
+static void C(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_Q2C(q2c,data);
 	struct proc_q_arg pqa = {
@@ -77,21 +79,21 @@ static void C(struct blk_io_trace *t, void *data)
 	if(t->time > q2c->end)
 		q2c->end = t->time;
 
-	g_hash_table_foreach_remove(q2c->qs,proc_q,&pqa);
+	hash_table_foreach_remove(q2c->qs,proc_q,&pqa);
 	if(q2c->outstanding==0 && q2c->processed>0) {
 		q2c->q2c_time += q2c->end - q2c->start;
 		restart_ongoing(q2c);
 	}
 }
 
-static void Q(struct blk_io_trace *t, void *data)
+static void Q(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_Q2C(q2c,data);
 
 	__u64 blks = t_blks(t);
 
 	DECL_DUP(struct blk_io_trace,new_t,t);
-	g_hash_table_insert(q2c->qs, new_t, new_t);
+	hash_table_insert(q2c->qs, new_t, new_t);
 	q2c->outstanding++;
 	q2c->q_reqs++;
 	q2c->q_total_size+=blks;
@@ -135,11 +137,11 @@ void q2c_print_results(const void *data)
 
 void q2c_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un2)
 {
-	struct q2c_data *q2c = p->data = g_new(struct q2c_data,1);
-	q2c->qs = g_hash_table_new_full(g_direct_hash,
-			g_direct_equal,
+	struct q2c_data *q2c = p->data = malloc(sizeof(struct q2c_data));
+	q2c->qs = hash_table_new(ptr_hash,
+			ptr_equal,
 			NULL,
-			g_free);
+			free);
 	restart_ongoing(q2c);
 	
 	q2c->q2c_time = q2c->maxouts = 0;
@@ -152,13 +154,20 @@ void q2c_ops_init(struct plugin_ops *po)
 	po->print_results = q2c_print_results;
 	
 	/* association of event int and function */
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_COMPLETE,C);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_QUEUE,Q);
+    struct event_entry *e1 = malloc(sizeof(struct event_entry));
+    e1->event_key = __BLK_TA_COMPLETE;
+    e1->event_handler = (event_func_t)C;
+	RB_INSERT(event_tree_head, po->event_tree, e1);
+
+    struct event_entry *e2 = malloc(sizeof(struct event_entry));
+    e2->event_key = __BLK_TA_QUEUE;
+    e2->event_handler = (event_func_t)Q;
+	RB_INSERT(event_tree_head, po->event_tree, e2);
 }
 
 void q2c_destroy(struct plugin *p)
 {
 	DECL_ASSIGN_Q2C(q2c,p->data);
-	g_hash_table_destroy(q2c->qs);
-	g_free(p->data);
+	hash_table_destroy(q2c->qs);
+	free(p->data);
 }

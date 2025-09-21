@@ -1,9 +1,10 @@
 #include <asm/types.h>
-#include <glib.h>
 #include <stdio.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <float.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <gsl/gsl_histogram.h>
 
@@ -13,6 +14,7 @@
 #include <utils.h>
 #include <list_plugins.h>
 #include <reqsize.h>
+#include "include/sector_tree.h"
 
 #define DECL_ASSIGN_I2C(name,data)				\
 	struct i2c_data *name = (struct i2c_data *)data
@@ -32,7 +34,7 @@ struct oio_data
 
 struct i2c_data 
 {
-	GTree *is;
+	struct sector_tree_head *is;
 	FILE *oio_f;
 
 	__u32 outstanding;
@@ -45,7 +47,7 @@ struct i2c_data
 	FILE *oio_hist_f;
 };
 
-static void write_outs(struct i2c_data *i2c, struct blk_io_trace *t)
+static void write_outs(struct i2c_data *i2c, const struct blk_io_trace *t)
 {
 	if(i2c->oio_f)
 		fprintf(i2c->oio_f, "%f %u\n",
@@ -79,14 +81,13 @@ static void init_oio_data(struct oio_data *oio, int n)
 	}
 }
 
-static gboolean add_to_matrix(__u64 *__unused, struct blk_io_trace *t, struct i2c_data *i2c)
+static void add_to_matrix(struct sector_entry *se, struct i2c_data *i2c)
 {
+    struct blk_io_trace *t = se->trace;
 	gsl_histogram_increment(i2c->oio[i2c->outstanding].op[IS_WRITE(t)], (double)(t->bytes/BLK_SIZE));
-
-	return FALSE;
 }
 
-static void oio_change(struct i2c_data *i2c, struct blk_io_trace *t, int inc)
+static void oio_change(struct i2c_data *i2c, const struct blk_io_trace *t, int inc)
 {
 	/* allocate oio space if the one I had is over */
 	if(i2c->outstanding + 1 >= i2c->oio_size) {
@@ -108,31 +109,45 @@ static void oio_change(struct i2c_data *i2c, struct blk_io_trace *t, int inc)
 	}
 	i2c->maxouts = MAX(i2c->maxouts, i2c->outstanding);
 
-	g_tree_foreach(i2c->is, (GTraverseFunc)add_to_matrix, i2c);
+    struct sector_entry *se;
+    RB_FOREACH(se, sector_tree_head, i2c->is) {
+        add_to_matrix(se, i2c);
+    }
 	
 	write_outs(i2c, t);
 }
 
-static void C(struct blk_io_trace *t, void *data)
+static void C(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_I2C(i2c,data);
+    struct sector_entry find, *res;
+    find.sector = t->sector;
 
-	if(g_tree_lookup(i2c->is, &t->sector)!=NULL) {
-		g_tree_remove(i2c->is, &t->sector);
+	res = RB_FIND(sector_tree_head, i2c->is, &find);
+	if(res !=NULL) {
+		RB_REMOVE(sector_tree_head, i2c->is, res);
+		free(res->trace);
+		free(res);
 		
-		oio_change(i2c, t, FALSE);
+		oio_change(i2c, t, 0);
 	}
 }
 
-static void I(struct blk_io_trace *t, void *data)
+static void I(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_I2C(i2c,data);
+    struct sector_entry find, *res;
+    find.sector = t->sector;
 
-	if(g_tree_lookup(i2c->is, &t->sector)==NULL) {
+	res = RB_FIND(sector_tree_head, i2c->is, &find);
+	if(res == NULL) {
 		DECL_DUP(struct blk_io_trace,new_t,t);
-		g_tree_insert(i2c->is,&new_t->sector,new_t);
+        struct sector_entry *new_se = malloc(sizeof(struct sector_entry));
+        new_se->sector = new_t->sector;
+        new_se->trace = new_t;
+		RB_INSERT(sector_tree_head, i2c->is, new_se);
 
-		oio_change(i2c, t, TRUE);
+		oio_change(i2c, t, 1);
 	}
 }
 
@@ -207,9 +222,10 @@ void i2c_print_results(const void *data)
 void i2c_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *pa)
 {
 	char filename[FILENAME_MAX];
-	struct i2c_data *i2c = p->data = g_new(struct i2c_data,1);
+	struct i2c_data *i2c = p->data = malloc(sizeof(struct i2c_data));
 
-	i2c->is = g_tree_new(comp_int64);
+	i2c->is = malloc(sizeof(struct sector_tree_head));
+    RB_INIT(sector_tree_head, i2c->is);
 	i2c->outstanding = 0;
 	i2c->maxouts = 0;
 
@@ -238,8 +254,15 @@ void i2c_ops_init(struct plugin_ops *po)
 	po->print_results = i2c_print_results;
 	
 	/* association of event int and function */
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_COMPLETE,C);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_INSERT,I);
+    struct event_entry *e1 = malloc(sizeof(struct event_entry));
+    e1->event_key = __BLK_TA_COMPLETE;
+    e1->event_handler = C;
+	RB_INSERT(event_tree_head, po->event_tree, e1);
+
+    struct event_entry *e2 = malloc(sizeof(struct event_entry));
+    e2->event_key = __BLK_TA_INSERT;
+    e2->event_handler = I;
+	RB_INSERT(event_tree_head, po->event_tree, e2);
 }
 
 void i2c_destroy(struct plugin *p)
@@ -260,5 +283,13 @@ void i2c_destroy(struct plugin *p)
 	}
 	free(i2c->oio);
 
-	g_free(p->data);
+    struct sector_entry *se, *next;
+    RB_FOREACH_SAFE(se, sector_tree_head, i2c->is, next) {
+        RB_REMOVE(sector_tree_head, i2c->is, se);
+        free(se->trace);
+        free(se);
+    }
+    free(i2c->is);
+
+	free(p->data);
 }

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <asm/types.h>
 
 #include <plugins.h>
@@ -14,7 +15,7 @@ struct merge_data
 	__u64 ins;
 };
 
-static void M(struct blk_io_trace *t, void *data)
+static void M(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_MERGE(m,data);
 
@@ -22,7 +23,7 @@ static void M(struct blk_io_trace *t, void *data)
 		m->ms++;
 }
 
-static void F(struct blk_io_trace *t, void *data)
+static void F(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_MERGE(m,data);
 	
@@ -30,7 +31,7 @@ static void F(struct blk_io_trace *t, void *data)
 		m->fs++;	
 }
 
-static void I(struct blk_io_trace *t, void *data)
+static void I(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_MERGE(m,data);
 
@@ -53,8 +54,8 @@ void merge_print_results(const void *data)
 	
 	if(m->ins) {
 		printf("#I: %llu #F+#M: %llu ratio: %f\n",
-		       m->ins,
-		       m->fs + m->ms,
+		       (long long unsigned int)m->ins,
+		       (long long unsigned int)(m->fs + m->ms),
 		       ((double) m->fs + m->ms + m->ins)/m->ins);
 	} else
 		printf("#I: 0\n");
@@ -62,7 +63,7 @@ void merge_print_results(const void *data)
 
 void merge_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un2)
 {
-	struct merge_data *m = p->data = g_new(struct merge_data,1);
+	struct merge_data *m = p->data = malloc(sizeof(struct merge_data));
 	m->ms = m->fs = m->ins = 0;
 }
 
@@ -71,12 +72,23 @@ void merge_ops_init(struct plugin_ops *po)
 	po->add = merge_add;
 	po->print_results = merge_print_results;
 	
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_BACKMERGE,M);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_FRONTMERGE,F);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_INSERT,I);
+    struct event_entry *e1 = malloc(sizeof(struct event_entry));
+    e1->event_key = __BLK_TA_BACKMERGE;
+    e1->event_handler = (event_func_t)M;
+	RB_INSERT(event_tree_head, po->event_tree, e1);
+
+    struct event_entry *e2 = malloc(sizeof(struct event_entry));
+    e2->event_key = __BLK_TA_FRONTMERGE;
+    e2->event_handler = (event_func_t)F;
+	RB_INSERT(event_tree_head, po->event_tree, e2);
+
+    struct event_entry *e3 = malloc(sizeof(struct event_entry));
+    e3->event_key = __BLK_TA_INSERT;
+    e3->event_handler = (event_func_t)I;
+	RB_INSERT(event_tree_head, po->event_tree, e3);
 }
 
 void merge_destroy(struct plugin *p)
 {
-	g_free(p->data);
+	free(p->data);
 }

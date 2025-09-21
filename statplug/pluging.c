@@ -1,9 +1,11 @@
 #include <asm/types.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
 #include <plugins.h>
+#include <utils.h>
 
 #define DECL_ASSIGN_PLUGING(name,data)				\
 	struct pluging_data *name = (struct pluging_data *)data
@@ -16,20 +18,20 @@ struct pluging_data
 	__u64 nplugs;
 	
 	__u64 plug_time;
-	gboolean plugged;
+	int plugged;
 };
 
-static void P(struct blk_io_trace *t, void *data)
+static void P(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_PLUGING(plug,data);
 
 	if(!plug->plugged) {
 		plug->plug_time = t->time;
-		plug->plugged = TRUE;
+		plug->plugged = 1;
 	}
 }
 
-static void U(struct blk_io_trace *t, void *data)
+static void U(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_PLUGING(plug,data);
 	
@@ -42,7 +44,7 @@ static void U(struct blk_io_trace *t, void *data)
 		plug->min = MIN(plug->min,time);
 		plug->max = MAX(plug->max,time);
 		
-		plug->plugged = FALSE;
+		plug->plugged = 0;
 		plug->plug_time = 0;
 	}
 }
@@ -73,7 +75,7 @@ void pluging_print_results(const void *data)
 
 void pluging_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un2)
 {
-	struct pluging_data *plug = p->data = g_new(struct pluging_data,1);
+	struct pluging_data *plug = p->data = malloc(sizeof(struct pluging_data));
 	
 	plug->min = ~0;
 	plug->max = 0;
@@ -87,12 +89,23 @@ void pluging_ops_init(struct plugin_ops *po)
 	po->add = pluging_add;
 	po->print_results = pluging_print_results;
 	
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_PLUG,P);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_UNPLUG_IO,U);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_UNPLUG_TIMER,U);
+    struct event_entry *e1 = malloc(sizeof(struct event_entry));
+    e1->event_key = __BLK_TA_PLUG;
+    e1->event_handler = (event_func_t)P;
+	RB_INSERT(event_tree_head, po->event_tree, e1);
+
+    struct event_entry *e2 = malloc(sizeof(struct event_entry));
+    e2->event_key = __BLK_TA_UNPLUG_IO;
+    e2->event_handler = (event_func_t)U;
+	RB_INSERT(event_tree_head, po->event_tree, e2);
+
+    struct event_entry *e3 = malloc(sizeof(struct event_entry));
+    e3->event_key = __BLK_TA_UNPLUG_TIMER;
+    e3->event_handler = (event_func_t)U;
+	RB_INSERT(event_tree_head, po->event_tree, e3);
 }
 
 void pluging_destroy(struct plugin *p)
 {
-	g_free(p->data);
+	free(p->data);
 }

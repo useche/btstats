@@ -1,6 +1,6 @@
 #include <asm/types.h>
-#include <glib.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -9,7 +9,7 @@
 
 #include <reqsize.h>
 
-static void C(struct blk_io_trace *t, void *data)
+static void C(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_REQSIZE(rsd,data);
 	
@@ -44,17 +44,17 @@ void reqsize_print_results(const void *data)
 
 	if(rsd->reqs)
 		printf("Reqs. #: %lld Reads: %lld (%.1f%%) Size:(min: %lld avg: %f max: %lld (blks))\n",
-		       rsd->reqs,
-		       rsd->reads,
+		       (long long)rsd->reqs,
+		       (long long)rsd->reads,
 		       100*((double)rsd->reads)/rsd->reqs,
-		       rsd->min,
+		       (long long)rsd->min,
 		       ((double)rsd->total_size)/rsd->reqs,
-		       rsd->max);
+		       (long long)rsd->max);
 }
 
 void reqsize_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un2)
 {
-	struct reqsize_data *req = p->data = g_new(struct reqsize_data,1);
+	struct reqsize_data *req = p->data = malloc(sizeof(struct reqsize_data));
 	req->min = ~0;
 	req->max = 0;
 	req->total_size = 0;
@@ -68,10 +68,13 @@ void reqsize_ops_init(struct plugin_ops *po)
 	po->print_results = reqsize_print_results;
 	
 	/* association of event int and function */
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_COMPLETE,C);
+    struct event_entry *e = malloc(sizeof(struct event_entry));
+    e->event_key = __BLK_TA_COMPLETE;
+    e->event_handler = C;
+	RB_INSERT(event_tree_head, po->event_tree, e);
 }
 
 void reqsize_destroy(struct plugin *p)
 {
-	g_free(p->data);
+	free(p->data);
 }

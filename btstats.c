@@ -1,8 +1,7 @@
-#include <glib.h>
-#include <glib/gprintf.h>
 #include <string.h>
 #include <stdio.h>
 #include <getopt.h>
+#include <stdint.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -10,9 +9,13 @@
 #include <trace.h>
 #include <plugins.h>
 
-#include <utils.h>
+#include "include/utils.h"
+#include "include/hash.h"
+#include "include/vector.h"
 
-struct time_range 
+#define MAX_HEAD 256
+
+struct time_range
 {
 	__u64 start;
 	__u64 end;
@@ -22,8 +25,8 @@ struct time_range
 
 struct args
 {
-	GHashTable *devs_ranges;
-	gboolean total;
+	hash_table *devs_ranges;
+	int total;
 	char *d2c_det;
 	unsigned trc_rdr;
 	char *i2c_oio;
@@ -37,7 +40,7 @@ struct analyze_args
 	trace_reader_t reader;
 };
 
-void usage_exit() 
+void usage_exit()
 {
 	error_exit(
 		"Usage: btstats [-h] [-f <file>] [-r <reader>] [-t] [-d <file>] [-i <file>] [<trace> .. <trace>]\n\n"
@@ -55,59 +58,60 @@ void usage_exit()
 		"\t<trace>: String of device/range to analyze. Exclusive with -f.\n");
 }
 
-void parse_file(char *filename, struct args *a) 
+void parse_file(char *filename, struct args *a)
 {
 	char *line = NULL;
 	size_t len;
 	char curdev[FILENAME_MAX];
 	double last_start = -1;
-	
+
 	int e;
 	FILE *f = fopen(filename,"r");
 	if(!f) perror_exit("Ranges file");
 
-	a->devs_ranges = g_hash_table_new(g_str_hash,g_str_equal);
+	a->devs_ranges = hash_table_new(str_hash, str_equal, free, free);
 	memset(curdev,0,sizeof(curdev));
-	
+
 	while(getline(&line,&len,f) > 0) {
-		char **no_com = g_strsplit(line,"#",2);
-		no_com[0] = g_strstrip(no_com[0]);
-		
+		char **no_com = str_split(line,"#",2);
+		no_com[0] = str_strip(no_com[0]);
+
 		if(strlen(no_com[0])!=0) {
 			if(no_com[0][0] == '@') {
-				g_stpcpy(curdev,(no_com[0]+1));
+				strcpy(curdev,(no_com[0]+1));
 				last_start = 0;
 			} else {
 				double end;
 				struct time_range r;
-				GArray *ranges = NULL;
+				vector *ranges = NULL;
 				char *dev = NULL;
-				
+
 				if(strlen(curdev)==0)
 					error_exit("Wrong trace name\n");
-				
+
 				e = sscanf(no_com[0],"%lf",&end);
 				if(!e) error_exit("Wrong range\n");
-				
+
 				r.start = DOUBLE_TO_NANO_ULL(last_start);
-				r.end = end==-1?G_MAXUINT64:DOUBLE_TO_NANO_ULL(end);
-				
+				r.end = end==-1?UINT64_MAX:DOUBLE_TO_NANO_ULL(end);
+
 				dev = curdev;
-				ranges = g_hash_table_lookup(a->devs_ranges, dev);
-				
+				ranges = hash_table_lookup(a->devs_ranges, dev);
+
 				if(!ranges) {
-					dev = g_strdup(curdev);
-					ranges = g_array_new(FALSE,FALSE,sizeof(struct time_range));
-					g_hash_table_insert(a->devs_ranges,dev,ranges);
+					dev = strdup(curdev);
+					ranges = malloc(sizeof(vector));
+					vector_init(ranges, sizeof(struct time_range));
+					hash_table_insert(a->devs_ranges,dev,ranges);
 				}
-				
-				g_array_append_val(ranges,r);
-				
+
+				vector_add(ranges, &r);
+
 				last_start = end;
 			}
 		}
-		
-		g_strfreev(no_com);
+
+		str_freev(no_com);
 		free(line);
 		line = NULL;
 	}
@@ -116,43 +120,44 @@ void parse_file(char *filename, struct args *a)
 void parse_dev_str(char **devs, struct args *a)
 {
 	int i, e;
-	
-	a->devs_ranges = g_hash_table_new(g_str_hash,g_str_equal);
-	
+
+	a->devs_ranges = hash_table_new(str_hash, str_equal, free, free);
+
 	for(i=0; devs[i]; ++i) {
-		GArray *ranges = NULL;
+		vector *ranges = NULL;
 		struct time_range r;
 
 		char *dev = NULL;
-		char **dev_pair = g_strsplit(devs[i],"@",2);
-		
+		char **dev_pair = str_split(devs[i],"@",2);
+
 		double d_start = 0;
 		double d_end = -1;
-		
+
 		if(dev_pair[1]) {
 			e = sscanf(dev_pair[1],"%lf:%lf",&d_start,&d_end);
 			if(!e) error_exit("Wrong devices or ranges\n");
 		}
-		
+
 		r.start = DOUBLE_TO_NANO_ULL(d_start);
-		r.end = d_end==-1?G_MAXUINT64:DOUBLE_TO_NANO_ULL(d_end);
+		r.end = d_end==-1?UINT64_MAX:DOUBLE_TO_NANO_ULL(d_end);
 
 		dev = dev_pair[0];
-		ranges = g_hash_table_lookup(a->devs_ranges,dev);
+		ranges = hash_table_lookup(a->devs_ranges,dev);
 
 		if(!ranges) {
-			dev = g_strdup(dev_pair[0]);
-			ranges = g_array_new(FALSE,FALSE,sizeof(struct time_range));
-			g_hash_table_insert(a->devs_ranges,dev,ranges);
+			dev = strdup(dev_pair[0]);
+			ranges = malloc(sizeof(vector));
+			vector_init(ranges, sizeof(struct time_range));
+			hash_table_insert(a->devs_ranges,dev,ranges);
 		}
 
-		g_array_append_val(ranges,r);
-		
-		g_strfreev(dev_pair);
+		vector_add(ranges, &r);
+
+		str_freev(dev_pair);
 	}
 }
 
-void handle_args(int argc, char **argv, struct args *a) 
+void handle_args(int argc, char **argv, struct args *a)
 {
 	int c, r;
 	char *file = NULL;
@@ -171,18 +176,18 @@ void handle_args(int argc, char **argv, struct args *a)
 				{"i2c-oio",		required_argument,	0, 'i'},
 				{"i2c-oio-hist",	required_argument,	0, 's'},
 				{0,0,0,0}
-			};		
-		
+			};
+
 		c = getopt_long(argc, argv, "f:thd:r:i:s:", long_options, &option_index);
-		
+
 		if (c == -1) break;
-		
+
 		switch (c) {
 		case 'f':
 			file = optarg;
 			break;
 		case 't':
-			a->total = TRUE;
+			a->total = 1;
 			break;
 		case 'd':
 			a->d2c_det = optarg;
@@ -203,11 +208,11 @@ void handle_args(int argc, char **argv, struct args *a)
 			break;
 		}
 	}
-	
+
 	if((file && argc != optind)||
 	   (!file && argc == optind))
 		usage_exit();
-	
+
 	if(file)
 		parse_file(file,a);
 	else
@@ -221,56 +226,56 @@ void range_finish(struct time_range *range,
 {
 	char head[MAX_HEAD];
 	char end_range[MAX_HEAD / 2];
-	
+
 	/* adding the current plugin set to the global ps */
 	if(gps)
 		plugin_set_add(gps,ps);
-	
-	if(range->end == G_MAXUINT64)
+
+	if(range->end == UINT64_MAX)
 		sprintf(end_range,"%s","inf");
 	else
 		sprintf(end_range,"%.4f",NANO_ULL_TO_DOUBLE(range->end));
-	
+
 	sprintf(head,"%s[%.4f:%s]",
 		dev,
 		NANO_ULL_TO_DOUBLE(range->start),
 		end_range);
-	
-	
+
+
 	plugin_set_print(ps,head);
-	plugin_set_destroy(ps);	
+	plugin_set_destroy(ps);
 }
 
-void analyze_device(char *dev, GArray *ranges,
+void analyze_device(char *dev, vector *ranges,
 		struct plugin_set *ps,
 		struct plug_args *pa,
-		trace_reader_t read_next) 
+		trace_reader_t read_next)
 {
-	unsigned i;
+	int i;
 	struct blk_io_trace t;
 	struct trace *dt;
-	
+
 	/* init all plugin sets */
-	for(i = 0; i < ranges->len; ++i) {
-		struct time_range *r = &g_array_index(ranges,struct time_range,i);
+	for(i = 0; i < vector_total(ranges); ++i) {
+		struct time_range *r = vector_get(ranges,i);
 		pa->end_range = r->end;
 		r->ps = plugin_set_create(pa);
 	}
-	
+
 	/* read and collect stats */
 	dt = trace_create(dev);
-	while(read_next(dt,&t) && ranges->len > 0) {
+	while(read_next(dt,&t) && vector_total(ranges) > 0) {
 		i = 0;
-		while(i < ranges->len) {
-			struct time_range *r = &g_array_index(ranges,struct time_range,i);
-			
+		while(i < vector_total(ranges)) {
+			struct time_range *r = vector_get(ranges,i);
+
 			if(t.time > r->end) {
 				range_finish(r,ps,r->ps,dev);
-				g_array_remove_index_fast(ranges,i);
+				vector_delete_fast(ranges,i);
 			} else {
 				if(r->start <= t.time)
 					plugin_set_add_trace(r->ps,&t);
-				
+
 				i++;
 			}
 		}
@@ -278,38 +283,39 @@ void analyze_device(char *dev, GArray *ranges,
 	trace_destroy(dt);
 
 	/* finish the ps which range is beyond the end */
-	for(i = 0; i < ranges->len; ++i) {
-		struct time_range *r = &g_array_index(ranges,struct time_range,i);
+	for(i = 0; i < vector_total(ranges); ++i) {
+		struct time_range *r = vector_get(ranges,i);
 		range_finish(r,ps,r->ps,dev);
 	}
 }
 
-void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer ar) 
+void analyze_device_hash(void *dev_arg, void *ranges_arg, void *ar)
 {
 	char *dev = dev_arg;
-	GArray *ranges = ranges_arg;
+	vector *ranges = ranges_arg;
 	struct plugin_set *global_plugin = ((struct analyze_args *)ar)->ps;
 	struct plug_args *pa = ((struct analyze_args *)ar)->pa;
 	trace_reader_t rdr = ((struct analyze_args *)ar)->reader;
-	
+
 	analyze_device(dev,ranges,global_plugin,pa,rdr);
-	
+
 	free(dev);
-	g_array_free(ranges,TRUE);
+	vector_free(ranges);
+	free(ranges);
 }
 
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
 	struct args a;
 	struct plug_args pa;
-	
+
 	struct analyze_args ar;
 	struct plugin_set *global_plugin = NULL;
-	
+
 	handle_args(argc,argv,&a);
-	
+
 	init_plugs_ops();
-	
+
 	if(a.total)
 		global_plugin = plugin_set_create(NULL);
 
@@ -322,14 +328,14 @@ int main(int argc, char **argv)
 	ar.ps = global_plugin;
 	ar.pa = &pa;
 	ar.reader = reader[a.trc_rdr];
-	g_hash_table_foreach(a.devs_ranges,analyze_device_hash,&ar);
-	
+	hash_table_foreach(a.devs_ranges,analyze_device_hash,&ar);
+
 	if(a.total) {
 		plugin_set_print(global_plugin,"All");
 		plugin_set_destroy(global_plugin);
 	}
-	
+
 	destroy_plugs_ops();
-	
+
 	return 0;
 }

@@ -4,17 +4,26 @@
 #include <plugins.h>
 #include <list_plugins.h>
 
-#include <utils.h>
+#include "utils.h"
 
 /* array of operations and function initializer */
 struct plugin_ops ps_ops[N_PLUGINS];
+
+static int event_entry_cmp(const void *a, const void *b)
+{
+    const struct event_entry *e1 = a;
+    const struct event_entry *e2 = b;
+	return e1->event_key - e2->event_key;
+}
+
+RB_GENERATE(event_tree_head, event_entry, entry, event_entry_cmp);
 
 struct plugin_set *plugin_set_create(struct plug_args *pia)
 {
 	int i;
 	
-	struct plugin_set *tmp = g_new(struct plugin_set, 1);
-	tmp->plugs = g_new(struct plugin, N_PLUGINS);
+	struct plugin_set *tmp = malloc(sizeof(struct plugin_set));
+	tmp->plugs = malloc(sizeof(struct plugin) * N_PLUGINS);
 	tmp->n = N_PLUGINS;
 	
 	/* create and initilize a new set of plugins */
@@ -34,8 +43,8 @@ void plugin_set_destroy(struct plugin_set *ps)
 	for(i = 0; i < N_PLUGINS; ++i)
 		plug_init_dest[i].destroy(&ps->plugs[i]);
 	
-	g_free(ps->plugs);
-	g_free(ps);
+	free(ps->plugs);
+	free(ps);
 }
 
 void plugin_set_print(const struct plugin_set *ps, const char *head) 
@@ -51,15 +60,17 @@ void plugin_set_add_trace(struct plugin_set *ps, const struct blk_io_trace *t)
 {
 	int i;
 	long act;
-	event_func_t event_handler;
 	struct plugin *p;
 	
 	act = t->action & 0xffff;
 	for(i = 0; i < N_PLUGINS; ++i) {
 		p = &ps->plugs[i];
-		event_handler = g_tree_lookup(p->ops->event_tree,(gpointer)act);
-		if(event_handler)
-			event_handler(t,p->data);
+        struct event_entry find, *res;
+        find.event_key = act;
+
+		res = RB_FIND(event_tree_head, p->ops->event_tree, &find);
+		if(res)
+			res->event_handler(t,p->data);
 	}
 }
 
@@ -79,7 +90,8 @@ void init_plugs_ops()
 {
 	int i;	
 	for(i = 0; i < N_PLUGINS; ++i) {
-		ps_ops[i].event_tree = g_tree_new(comp_int);
+		ps_ops[i].event_tree = malloc(sizeof(struct event_tree_head));
+		RB_INIT(event_tree_head, ps_ops[i].event_tree);
 		if(plug_init_dest[i].ops_init)
 			plug_init_dest[i].ops_init(&ps_ops[i]);
 	}
@@ -89,9 +101,13 @@ void destroy_plugs_ops()
 {
 	int i;	
 	for(i = 0; i < N_PLUGINS; ++i) {
+        struct event_entry *var, *next;
 		if(plug_init_dest[i].ops_destroy)
 			plug_init_dest[i].ops_destroy(&ps_ops[i]);
-		g_tree_destroy(ps_ops[i].event_tree);
+        RB_FOREACH_SAFE(var, event_tree_head, ps_ops[i].event_tree, next) {
+            RB_REMOVE(event_tree_head, ps_ops[i].event_tree, var);
+            free(var);
+        }
+		free(ps_ops[i].event_tree);
 	}
 }
-

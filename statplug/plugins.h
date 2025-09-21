@@ -1,15 +1,25 @@
 #ifndef _PLUGINS_H_
 #define _PLUGINS_H_
 
-#include <glib.h>
 #include <blktrace_api.h>
+#include "include/bsd/tree.h"
 
 typedef void (*event_func_t)(const struct blk_io_trace *, void *);
-struct plugin_ops 
+
+struct event_entry {
+    int event_key;
+    event_func_t event_handler;
+    RB_ENTRY(event_entry) entry;
+};
+
+RB_HEAD(event_tree_head, event_entry);
+RB_PROTOTYPE(event_tree_head, event_entry, entry, event_entry_cmp);
+
+struct plugin_ops
 {
-	/* hash table with key = int of event,
+	/* red-black tree with key = int of event,
 	   value = the function to call */
-	GTree *event_tree;
+	struct event_tree_head *event_tree;
 
 	/* additional functions */
 	void (*add)(void *data1, const void *data2);

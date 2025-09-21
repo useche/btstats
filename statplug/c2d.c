@@ -1,6 +1,7 @@
 #include <asm/types.h>
-#include <glib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -27,7 +28,7 @@ struct c2d_data
 	struct reqsize_data *req_dat;
 };
 
-static void D(struct blk_io_trace *t, void *data)
+static void D(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_C2D(c2d,data);
 
@@ -35,7 +36,7 @@ static void D(struct blk_io_trace *t, void *data)
 		c2d->prospect_time = t->time - c2d->last_C;
 }
 
-static void R(struct blk_io_trace *t, void *data)
+static void R(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_C2D(c2d,data);
 
@@ -43,7 +44,7 @@ static void R(struct blk_io_trace *t, void *data)
 		c2d->prospect_time = NOT_NUM;
 }
 
-static void C(struct blk_io_trace *t, void *data)
+static void C(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_C2D(c2d,data);
 
@@ -86,7 +87,7 @@ void c2d_print_results(const void *data)
 
 void c2d_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un2)
 {
-	struct c2d_data *c2d = p->data = g_new0(struct c2d_data,1);
+	struct c2d_data *c2d = p->data = calloc(1, sizeof(struct c2d_data));
 	c2d->min = NOT_NUM;
 	c2d->last_C = NOT_NUM;
 	c2d->prospect_time = NOT_NUM;
@@ -98,12 +99,23 @@ void c2d_ops_init(struct plugin_ops *po)
 	po->print_results = c2d_print_results;
 	
 	/* association of event int and function */
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_ISSUE,D);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_COMPLETE,C);
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_REQUEUE,R);
+    struct event_entry *e1 = malloc(sizeof(struct event_entry));
+    e1->event_key = __BLK_TA_ISSUE;
+    e1->event_handler = D;
+	RB_INSERT(event_tree_head, po->event_tree, e1);
+
+    struct event_entry *e2 = malloc(sizeof(struct event_entry));
+    e2->event_key = __BLK_TA_COMPLETE;
+    e2->event_handler = C;
+	RB_INSERT(event_tree_head, po->event_tree, e2);
+
+    struct event_entry *e3 = malloc(sizeof(struct event_entry));
+    e3->event_key = __BLK_TA_REQUEUE;
+    e3->event_handler = R;
+	RB_INSERT(event_tree_head, po->event_tree, e3);
 }
 
 void c2d_destroy(struct plugin *p)
 {
-	g_free(p->data);
+	free(p->data);
 }

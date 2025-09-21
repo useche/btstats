@@ -1,6 +1,7 @@
 #include <asm/types.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -24,7 +25,7 @@ struct seek_data
 	__u64 seeks;
 };
 
-static void C(struct blk_io_trace *t, void *data)
+static void C(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_SEEK(seek,data);
 	
@@ -64,16 +65,16 @@ void seek_print_results(const void *data)
 		printf("Seq.: %.2f%%\n",
 		       (1-(((double)seek->seeks)/seek->req_dat->total_size))*100);
 		printf("Seeks #: %llu min: %llu avg: %f max: %llu (blks)\n",
-		       seek->seeks,
-		       seek->min,
+		       (long long unsigned int)seek->seeks,
+		       (long long unsigned int)seek->min,
 		       ((double)seek->total)/seek->seeks,
-		       seek->max);
+		       (long long unsigned int)seek->max);
 	}
 }
 
 void seek_init(struct plugin *p, struct plugin_set *ps, struct plug_args *__un)
 {
-	struct seek_data *seek = p->data = g_new0(struct seek_data,1);
+	struct seek_data *seek = p->data = calloc(1, sizeof(struct seek_data));
 	seek->lastpos = UINT64_MAX;
 	seek->max = 0;
 	seek->min = ~0;
@@ -84,7 +85,7 @@ void seek_init(struct plugin *p, struct plugin_set *ps, struct plug_args *__un)
 
 void seek_destroy(struct plugin *p)
 {
-	g_free(p->data);
+	free(p->data);
 }
 
 void seek_ops_init(struct plugin_ops *po)
@@ -92,5 +93,8 @@ void seek_ops_init(struct plugin_ops *po)
 	po->add = seek_add;
 	po->print_results = seek_print_results;
 	
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_COMPLETE,C);
+    struct event_entry *e = malloc(sizeof(struct event_entry));
+    e->event_key = __BLK_TA_COMPLETE;
+    e->event_handler = (event_func_t)C;
+	RB_INSERT(event_tree_head, po->event_tree, e);
 }

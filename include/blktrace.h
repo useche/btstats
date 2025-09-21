@@ -23,6 +23,12 @@
 #define t_blks(t)	((t)->bytes >> 9)
 #define t_kb(t)		((t)->bytes >> 10)
 
+#define IS_WRITE(t) ((t)->action & BLK_TC_ACT(BLK_TC_WRITE))
+#define BLK_SIZE 512
+
+#define BIT_START(t) ((t)->sector)
+#define BIT_END(t) ((t)->sector + t_blks(t))
+
 #define CHECK_MAGIC(t)		(((t)->magic & 0xffffff00) == BLK_IO_TRACE_MAGIC)
 #define SUPPORTED_VERSION	(0x07)
 
