@@ -138,6 +138,32 @@ seq2.blktrace.0 exist corresponding to the blktrace files.
 		200
 		400
 
+Development Environment
+-----------------------
+
+This project uses Nix to manage its development environment and dependencies.
+
+To enter the development shell with all necessary tools and libraries
+(including `gcc`, `glib`, `gsl`, `pkg-config`, and `bear`), simply run:
+
+```bash
+nix-shell
+```
+
+Generating `compile_commands.json`
+---------------------------------
+
+A `compile_commands.json` file is useful for various development tools (e.g.,
+language servers, static analyzers). You can generate it using `bear` within
+the Nix development shell:
+
+1.  Ensure you are in the Nix development shell (run `nix-shell`).
+2.  Run `bear` with your `make` command:
+    ```bash
+    bear make
+    ```
+    This will create a `compile_commands.json` file in the project root.
+
 Requirements
 ------------
 

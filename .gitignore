@@ -6,3 +6,5 @@ tags
 */*.o
 btstats
 .session.vim
+compile_commands.json
+.cache

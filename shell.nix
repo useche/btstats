@@ -6,5 +6,6 @@ pkgs.mkShell {
     glib
     gsl
     pkg-config
+    bear
   ];
 }
