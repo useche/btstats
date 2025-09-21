@@ -38,8 +38,8 @@ struct proc_q_arg {
 
 static gboolean proc_q(gpointer __unused, gpointer tp, gpointer pqap)
 {
-	struct blk_io_trace *t = (struct blk_io_trace *)tp;
-	struct proc_q_arg *pqa = (struct proc_q_arg *)pqap;
+	struct blk_io_trace *t = static_cast<struct blk_io_trace *>(tp);
+	struct proc_q_arg *pqa = static_cast<struct proc_q_arg *>(pqap);
 
 	__u64 this_s = BIT_START(t), this_e = BIT_END(t);
 	__u64 this_ts = t->time;
@@ -128,7 +128,8 @@ void q2c_print_results(const void *data)
 void q2c_init(struct plugin *p, struct plugin_set *__un1,
 	      struct plug_args *__un2)
 {
-	struct q2c_data *q2c = p->data = g_new(struct q2c_data, 1);
+	p->data = g_new(struct q2c_data, 1);
+	struct q2c_data *q2c = static_cast<struct q2c_data*>(p->data);
 	q2c->qs = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
 					g_free);
 	restart_ongoing(q2c);
@@ -143,8 +144,8 @@ void q2c_ops_init(struct plugin_ops *po)
 	po->print_results = q2c_print_results;
 
 	/* association of event int and function */
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, C);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_QUEUE, Q);
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, reinterpret_cast<gpointer>(C));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_QUEUE, reinterpret_cast<gpointer>(Q));
 }
 
 void q2c_destroy(struct plugin *p)

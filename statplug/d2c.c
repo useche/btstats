@@ -97,7 +97,7 @@ static void C(struct blk_io_trace *t, void *data)
 
 	__u64 blks = t_blks(t);
 	struct blk_io_trace *dtrace =
-		g_tree_lookup(d2c->prospect_ds, &t->sector);
+		static_cast<struct blk_io_trace *>(g_tree_lookup(d2c->prospect_ds, &t->sector));
 
 	if (blks && dtrace) {
 		if (dtrace->bytes == t->bytes) {
@@ -133,7 +133,7 @@ static void R(struct blk_io_trace *t, void *data)
 	DECL_ASSIGN_D2C(d2c, data);
 
 	struct blk_io_trace *dtrace =
-		g_tree_lookup(d2c->prospect_ds, &t->sector);
+		static_cast<struct blk_io_trace *>(g_tree_lookup(d2c->prospect_ds, &t->sector));
 
 	if (dtrace) {
 		assert(dtrace->bytes == t->bytes);
@@ -179,7 +179,8 @@ void d2c_print_results(const void *data)
 void d2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *pia)
 {
 	char filename[FILENAME_MAX];
-	struct d2c_data *d2c = p->data = g_new(struct d2c_data, 1);
+	p->data = g_new(struct d2c_data, 1);
+	struct d2c_data *d2c = static_cast<struct d2c_data*>(p->data);
 
 	d2c->outstanding = d2c->processed = 0;
 	d2c->d2ctime = d2c->maxouts = 0;
@@ -189,7 +190,7 @@ void d2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *pia)
 		g_array_sized_new(FALSE, FALSE, sizeof(__u64), TENT_OUTS_RQS);
 	d2c->ctimes =
 		g_array_sized_new(FALSE, FALSE, sizeof(__u64), TENT_OUTS_RQS);
-	d2c->req_dat = ps->plugs[REQ_SIZE_IND].data;
+	d2c->req_dat = static_cast<struct reqsize_data *>(ps->plugs[REQ_SIZE_IND].data);
 
 	/* open d2c detail file */
 	d2c->detail_f = NULL;
@@ -218,7 +219,7 @@ void d2c_ops_init(struct plugin_ops *po)
 	po->add = d2c_add;
 	po->print_results = d2c_print_results;
 
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, C);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_ISSUE, D);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_REQUEUE, R);
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, reinterpret_cast<gpointer>(C));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_ISSUE, reinterpret_cast<gpointer>(D));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_REQUEUE, reinterpret_cast<gpointer>(R));
 }

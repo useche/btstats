@@ -86,7 +86,8 @@ void c2d_print_results(const void *data)
 void c2d_init(struct plugin *p, struct plugin_set *__un1,
 	      struct plug_args *__un2)
 {
-	struct c2d_data *c2d = p->data = g_new0(struct c2d_data, 1);
+	p->data = g_new0(struct c2d_data, 1);
+	struct c2d_data *c2d = static_cast<struct c2d_data*>(p->data);
 	c2d->min = NOT_NUM;
 	c2d->last_C = NOT_NUM;
 	c2d->prospect_time = NOT_NUM;
@@ -98,9 +99,9 @@ void c2d_ops_init(struct plugin_ops *po)
 	po->print_results = c2d_print_results;
 
 	/* association of event int and function */
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_ISSUE, D);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, C);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_REQUEUE, R);
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_ISSUE, reinterpret_cast<gpointer>(D));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, reinterpret_cast<gpointer>(C));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_REQUEUE, reinterpret_cast<gpointer>(R));
 }
 
 void c2d_destroy(struct plugin *p)

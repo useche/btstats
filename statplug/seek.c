@@ -71,13 +71,14 @@ void seek_print_results(const void *data)
 
 void seek_init(struct plugin *p, struct plugin_set *ps, struct plug_args *__un)
 {
-	struct seek_data *seek = p->data = g_new0(struct seek_data, 1);
+	p->data = g_new0(struct seek_data, 1);
+	struct seek_data *seek = static_cast<struct seek_data*>(p->data);
 	seek->lastpos = UINT64_MAX;
 	seek->max = 0;
 	seek->min = ~0;
 	seek->total = 0;
 	seek->seeks = 0;
-	seek->req_dat = (struct reqsize_data *)ps->plugs[REQ_SIZE_IND].data;
+	seek->req_dat = static_cast<struct reqsize_data *>(ps->plugs[REQ_SIZE_IND].data);
 }
 
 void seek_destroy(struct plugin *p)
@@ -90,5 +91,5 @@ void seek_ops_init(struct plugin_ops *po)
 	po->add = seek_add;
 	po->print_results = seek_print_results;
 
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, C);
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, reinterpret_cast<gpointer>(C));
 }

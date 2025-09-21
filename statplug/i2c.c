@@ -89,8 +89,8 @@ static void oio_change(struct i2c_data *i2c, struct blk_io_trace *t, int inc)
 {
 	/* allocate oio space if the one I had is over */
 	if (i2c->outstanding + 1 >= i2c->oio_size) {
-		i2c->oio = realloc(i2c->oio, (i2c->oio_size + OIO_ALLOC) *
-						     sizeof(struct oio_data));
+		i2c->oio = static_cast<struct oio_data*>(realloc(i2c->oio, (i2c->oio_size + OIO_ALLOC) *
+						     sizeof(struct oio_data)));
 		init_oio_data(i2c->oio + i2c->oio_size, OIO_ALLOC);
 		i2c->oio_size += OIO_ALLOC;
 	}
@@ -156,8 +156,8 @@ void i2c_add(void *data1, const void *data2)
 
 	if (i2c1->oio_size < i2c2->oio_size) {
 		__u32 diff = i2c2->oio_size - i2c1->oio_size;
-		i2c1->oio = realloc(i2c1->oio,
-				    i2c2->oio_size * sizeof(struct oio_data));
+		i2c1->oio = static_cast<struct oio_data*>(realloc(i2c1->oio,
+				    i2c2->oio_size * sizeof(struct oio_data)));
 		init_oio_data(i2c1->oio + diff, diff);
 		i2c1->oio_size = i2c2->oio_size;
 	}
@@ -209,7 +209,8 @@ void i2c_print_results(const void *data)
 void i2c_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *pa)
 {
 	char filename[FILENAME_MAX];
-	struct i2c_data *i2c = p->data = g_new(struct i2c_data, 1);
+	p->data = g_new(struct i2c_data, 1);
+	struct i2c_data *i2c = static_cast<struct i2c_data*>(p->data);
 
 	i2c->is = g_tree_new(comp_int64);
 	i2c->outstanding = 0;
@@ -243,8 +244,8 @@ void i2c_ops_init(struct plugin_ops *po)
 	po->print_results = i2c_print_results;
 
 	/* association of event int and function */
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, C);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_INSERT, I);
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, reinterpret_cast<gpointer>(C));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_INSERT, reinterpret_cast<gpointer>(I));
 }
 
 void i2c_destroy(struct plugin *p)

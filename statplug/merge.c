@@ -61,7 +61,8 @@ void merge_print_results(const void *data)
 void merge_init(struct plugin *p, struct plugin_set *__un1,
 		struct plug_args *__un2)
 {
-	struct merge_data *m = p->data = g_new(struct merge_data, 1);
+	p->data = g_new(struct merge_data, 1);
+	struct merge_data *m = static_cast<struct merge_data*>(p->data);
 	m->ms = m->fs = m->ins = 0;
 }
 
@@ -70,9 +71,9 @@ void merge_ops_init(struct plugin_ops *po)
 	po->add = merge_add;
 	po->print_results = merge_print_results;
 
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_BACKMERGE, M);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_FRONTMERGE, F);
-	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_INSERT, I);
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_BACKMERGE, reinterpret_cast<gpointer>(M));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_FRONTMERGE, reinterpret_cast<gpointer>(F));
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_INSERT, reinterpret_cast<gpointer>(I));
 }
 
 void merge_destroy(struct plugin *p)
