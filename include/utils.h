@@ -1,25 +1,27 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include <asm/types.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <string.h>
+#include <asm/types.h>
+#include <stdbool.h>
 
-#define ALLOC_OBJ(name, type) type *name = malloc(sizeof(type));
+#define ALLOC_OBJ(name,type)			\
+	type *name = malloc(sizeof(type));
 
-#define error_exit(format, ...)                                                \
-  do {                                                                         \
-    fprintf(stderr, format, ##__VA_ARGS__);                                    \
-    exit(EXIT_FAILURE);                                                        \
-  } while (0)
+#define error_exit(format, ...) \
+  do { \
+    fprintf(stderr, format, ##__VA_ARGS__); \
+    exit(EXIT_FAILURE); \
+  } while(0)
 
-#define perror_exit(s)                                                         \
-  do {                                                                         \
-    perror(s);                                                                 \
-    exit(EXIT_FAILURE);                                                        \
-  } while (0)
+#define perror_exit(s) \
+  do { \
+    perror(s); \
+    exit(EXIT_FAILURE); \
+  } while(0)
 
 #define IS_WRITE(t) ((t)->action & BLK_TC_ACT(BLK_TC_WRITE))
 #define BLK_SIZE 512
@@ -27,9 +29,7 @@
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
-#define DECL_DUP(type, new, old)                                               \
-  type *new = malloc(sizeof(type));                                            \
-  memcpy(new, old, sizeof(type))
+#define DECL_DUP(type, new, old) type *new = malloc(sizeof(type)); memcpy(new, old, sizeof(type))
 
 char **str_split(const char *str, const char *delimiter, int max_tokens);
 void str_freev(char **strv);

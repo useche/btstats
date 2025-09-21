@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include <trace.h>
 
@@ -7,66 +8,65 @@
 #include <blktrace_api.h>
 
 static struct blk_io_trace at;
-static int send_p_d = 0;
+static bool send_p_d = false;
 static int out_reqs = 0;
 static __u64 blks;
 
-int trace_ata_piix_read_next(const struct trace *dt, struct blk_io_trace *t) {
-  int r;
+bool trace_ata_piix_read_next(const struct trace *dt, struct blk_io_trace *t) {
+	bool r;
 
-  if (send_p_d) {
-    /* if we have a pending D event,
-     * we first send this before the next one
-     */
-    *t = at;
-    send_p_d = 0;
-    return 1;
-  } else {
-  reread:
-    r = trace_read_next(dt, t);
-    blks = t_blks(t);
+	if(send_p_d) {
+		/* if we have a pending D event,
+		 * we first send this before the next one
+		 */
+		*t = at;
+		send_p_d = false;
+		return true;
+	} else {
+reread:
+		r = trace_read_next(dt,t);
+		blks = t_blks(t);
 
-    /* if the trace reach the end */
-    if (!r)
-      return 0;
+		/* if the trace reach the end */
+		if(!r) return false;
 
-    switch (t->action & 0xffff) {
-    case __BLK_TA_COMPLETE:
-      if (out_reqs == 2) {
-        send_p_d = 1;
+		switch(t->action & 0xffff) {
+			case __BLK_TA_COMPLETE:
+				if(out_reqs==2) {
+					send_p_d = true;
 
-        /* setting the time to the next D
-         * to be the time of the complete (ns)
-         * plus 1
-         */
-        at.time = t->time + 1;
-      }
-      out_reqs -= out_reqs > 0 ? 1 : 0;
-      break;
+					/* setting the time to the next D
+					 * to be the time of the complete (ns)
+					 * plus 1
+					 */
+					at.time = t->time+1;
+				}
+				out_reqs -= out_reqs>0?1:0;
+				break;
 
-    case __BLK_TA_ISSUE:
-      if (blks == 0)
-        break;
+			case __BLK_TA_ISSUE:
+				if(blks==0)
+					break;
 
-      /* we should not have more than 2
-       * outstanding rqs for this driver
-       */
-      assert(out_reqs < 2);
+				/* we should not have more than 2
+				 * outstanding rqs for this driver
+				 */
+				assert(out_reqs<2);
 
-      if (out_reqs++ == 1) {
-        at = *t;
+				if(out_reqs++==1) {
+					at = *t;
 
-        /* after this, we need to reread
-         * the next trace entry
-         */
-        goto reread;
-      }
-      break;
+					/* after this, we need to reread
+					 * the next trace entry
+					 */
+					goto reread;
+				}
+				break;
 
-    case __BLK_TA_REQUEUE:
-      out_reqs -= out_reqs > 0 ? 1 : 0;
-      break;
-    }
-    return 1;
-  }
+			case __BLK_TA_REQUEUE:
+				out_reqs -= out_reqs>0?1:0;
+				break;
+		}
+		return true;
+	}
 }
