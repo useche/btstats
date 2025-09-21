@@ -5,35 +5,31 @@
 #include <blktrace_api.h>
 
 typedef void (*event_func_t)(const struct blk_io_trace *, void *);
-struct plugin_ops 
-{
+struct plugin_ops {
 	/* hash table with key = int of event,
 	   value = the function to call */
 	GTree *event_tree;
 
 	/* additional functions */
 	void (*add)(void *data1, const void *data2);
-	void (*print_results)(const void *data);	
+	void (*print_results)(const void *data);
 };
 
-struct plugin
-{
+struct plugin {
 	/* private data per plugin */
 	void *data;
-	
+
 	/* ops */
 	struct plugin_ops *ops;
 };
 
 /* functions to create & destroy a plugin set */
-struct plugin_set 
-{
+struct plugin_set {
 	struct plugin *plugs;
 	int n;
 };
 
-struct plug_args
-{
+struct plug_args {
 	/* d2c args */
 	char *d2c_det_f;
 	__u64 end_range;
@@ -43,12 +39,10 @@ struct plug_args
 	char *i2c_oio_hist_f;
 };
 
-struct plug_init_dest_funcs
-{
+struct plug_init_dest_funcs {
 	/* init, destroy */
-	void (*init)(struct plugin *p,
-		struct plugin_set *ps,
-		struct plug_args *pia);
+	void (*init)(struct plugin *p, struct plugin_set *ps,
+		     struct plug_args *pia);
 	void (*destroy)(struct plugin *p);
 	void (*ops_init)(struct plugin_ops *po);
 	void (*ops_destroy)(struct plugin_ops *po);

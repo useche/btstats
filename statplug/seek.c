@@ -10,14 +10,13 @@
 
 #include <reqsize.h>
 
-#define DECL_ASSIGN_SEEK(name,data)				\
+#define DECL_ASSIGN_SEEK(name, data) \
 	struct seek_data *name = (struct seek_data *)data
 
-struct seek_data 
-{
+struct seek_data {
 	__u64 lastpos;
 	struct reqsize_data *req_dat;
-	
+
 	__u64 max;
 	__u64 min;
 	__u64 total;
@@ -26,54 +25,53 @@ struct seek_data
 
 static void C(struct blk_io_trace *t, void *data)
 {
-	DECL_ASSIGN_SEEK(seek,data);
-	
+	DECL_ASSIGN_SEEK(seek, data);
+
 	__u64 blks = t_blks(t);
-	
-	if(seek->lastpos != UINT64_MAX) {
-		if(seek->lastpos != t->sector) {
-                  __u64 distance = seek->lastpos > t->sector
-                                       ? seek->lastpos - t->sector
-                                       : t->sector - seek->lastpos;
-                  seek->total += distance;
-                  seek->max = MAX(seek->max, distance);
-                  seek->min = MIN(seek->min, distance);
-                  seek->seeks++;
+
+	if (seek->lastpos != UINT64_MAX) {
+		if (seek->lastpos != t->sector) {
+			__u64 distance = seek->lastpos > t->sector ?
+						 seek->lastpos - t->sector :
+						 t->sector - seek->lastpos;
+			seek->total += distance;
+			seek->max = MAX(seek->max, distance);
+			seek->min = MIN(seek->min, distance);
+			seek->seeks++;
 		}
 	}
-	
+
 	seek->lastpos = t->sector + blks;
 }
 
-void seek_add(void *data1, const void *data2) 
+void seek_add(void *data1, const void *data2)
 {
-	DECL_ASSIGN_SEEK(seek1,data1);
-	DECL_ASSIGN_SEEK(seek2,data2);
-	
-	seek1->min = MIN(seek1->min,seek2->min);
-	seek1->max = MAX(seek2->max,seek2->max);
+	DECL_ASSIGN_SEEK(seek1, data1);
+	DECL_ASSIGN_SEEK(seek2, data2);
+
+	seek1->min = MIN(seek1->min, seek2->min);
+	seek1->max = MAX(seek2->max, seek2->max);
 	seek1->total += seek2->total;
 	seek1->seeks += seek2->seeks;
 }
 
 void seek_print_results(const void *data)
 {
-	DECL_ASSIGN_SEEK(seek,data);
-	
-	if(seek->seeks) {
-		printf("Seq.: %.2f%%\n",
-		       (1-(((double)seek->seeks)/seek->req_dat->total_size))*100);
+	DECL_ASSIGN_SEEK(seek, data);
+
+	if (seek->seeks) {
+		printf("Seq.: %.2f%%\n", (1 - (((double)seek->seeks) /
+					       seek->req_dat->total_size)) *
+						 100);
 		printf("Seeks #: %llu min: %llu avg: %f max: %llu (blks)\n",
-		       seek->seeks,
-		       seek->min,
-		       ((double)seek->total)/seek->seeks,
-		       seek->max);
+		       seek->seeks, seek->min,
+		       ((double)seek->total) / seek->seeks, seek->max);
 	}
 }
 
 void seek_init(struct plugin *p, struct plugin_set *ps, struct plug_args *__un)
 {
-	struct seek_data *seek = p->data = g_new0(struct seek_data,1);
+	struct seek_data *seek = p->data = g_new0(struct seek_data, 1);
 	seek->lastpos = UINT64_MAX;
 	seek->max = 0;
 	seek->min = ~0;
@@ -91,6 +89,6 @@ void seek_ops_init(struct plugin_ops *po)
 {
 	po->add = seek_add;
 	po->print_results = seek_print_results;
-	
-	g_tree_insert(po->event_tree,(gpointer)__BLK_TA_COMPLETE,C);
+
+	g_tree_insert(po->event_tree, (gpointer)__BLK_TA_COMPLETE, C);
 }
