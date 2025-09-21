@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <getopt.h>
+#include <stdbool.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -21,7 +22,7 @@ struct time_range {
 
 struct args {
 	GHashTable *devs_ranges;
-	gboolean total;
+	bool total;
 	char *d2c_det;
 	unsigned trc_rdr;
 	char *i2c_oio;
@@ -189,7 +190,7 @@ void handle_args(int argc, char **argv, struct args *a)
 			file = optarg;
 			break;
 		case 't':
-			a->total = TRUE;
+			a->total = true;
 			break;
 		case 'd':
 			a->d2c_det = optarg;

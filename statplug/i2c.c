@@ -2,6 +2,7 @@
 #include <glib.h>
 #include <stdio.h>
 #include <assert.h>
+#include <stdbool.h>
 #include <inttypes.h>
 #include <float.h>
 
@@ -76,13 +77,13 @@ static void init_oio_data(struct oio_data *oio, int n)
 	}
 }
 
-static gboolean add_to_matrix(__u64 *__unused, struct blk_io_trace *t,
+static int add_to_matrix(__u64 *__unused, struct blk_io_trace *t,
 			      struct i2c_data *i2c)
 {
 	gsl_histogram_increment(i2c->oio[i2c->outstanding].op[IS_WRITE(t)],
 				(double)(t->bytes / BLK_SIZE));
 
-	return FALSE;
+	return 0;
 }
 
 static void oio_change(struct i2c_data *i2c, struct blk_io_trace *t, int inc)

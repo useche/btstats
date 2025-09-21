@@ -3,11 +3,12 @@
 
 #include <blktrace_api.h>
 #include <glib.h>
+#include <stdbool.h>
 
 struct trace_file {
 	struct blk_io_trace t;
 	int fd;
-	gboolean eof;
+	bool eof;
 };
 
 struct trace {
@@ -15,17 +16,17 @@ struct trace {
 	__u64 genesis;
 };
 
-typedef gboolean (*trace_reader_t)(const struct trace *, struct blk_io_trace *);
+typedef bool (*trace_reader_t)(const struct trace *, struct blk_io_trace *);
 
 /* constructor and destructor */
 struct trace *trace_create(const char *dev);
 void trace_destroy(struct trace *dt);
 
 /* default trace reader */
-gboolean trace_read_next(const struct trace *dt, struct blk_io_trace *t);
+bool trace_read_next(const struct trace *dt, struct blk_io_trace *t);
 
 /* reader for devices with ata_piix controller */
-gboolean trace_ata_piix_read_next(const struct trace *dt,
+bool trace_ata_piix_read_next(const struct trace *dt,
 				  struct blk_io_trace *t);
 
 /*

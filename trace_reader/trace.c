@@ -2,6 +2,7 @@
 
 #include <glib.h>
 #include <utils.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
 #include <libgen.h>
@@ -52,7 +53,7 @@ void correct_time(gpointer data, gpointer dt_arg)
 	tf->t.time -= dt->genesis;
 }
 
-gboolean not_real_event(struct blk_io_trace *t)
+bool not_real_event(struct blk_io_trace *t)
 {
 	return (t->action & BLK_TC_ACT(BLK_TC_NOTIFY)) ||
 	       (t->action & BLK_TC_ACT(BLK_TC_DISCARD)) ||
@@ -66,7 +67,7 @@ void read_next(struct trace_file *tf, __u64 genesis)
 	do {
 		e = read(tf->fd, &tf->t, sizeof(struct blk_io_trace));
 		if (e == 0) {
-			tf->eof = TRUE;
+			tf->eof = true;
 			break;
 		} else if (e == -1 || e != sizeof(struct blk_io_trace)) {
 			perror_exit("Reading trace\n");
@@ -179,17 +180,17 @@ void trace_destroy(struct trace *dt)
 	g_free(dt);
 }
 
-gboolean trace_read_next(const struct trace *dt, struct blk_io_trace *t)
+bool trace_read_next(const struct trace *dt, struct blk_io_trace *t)
 {
 	struct trace_file *min = NULL;
 
 	g_slist_foreach(dt->files, min_time, &min);
 
 	if (!min)
-		return FALSE;
+		return false;
 	else {
 		*t = min->t;
 		read_next(min, dt->genesis);
-		return TRUE;
+		return true;
 	}
 }
