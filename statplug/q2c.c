@@ -37,7 +37,7 @@ struct proc_q_arg {
 	struct q2c_data *q2c;
 };
 
-static int proc_q(gpointer __unused, gpointer tp, gpointer pqap)
+static bool proc_q_impl(gpointer __unused, gpointer tp, gpointer pqap)
 {
 	struct blk_io_trace *t = (struct blk_io_trace *)tp;
 	struct proc_q_arg *pqa = (struct proc_q_arg *)pqap;
@@ -50,10 +50,15 @@ static int proc_q(gpointer __unused, gpointer tp, gpointer pqap)
 			pqa->q2c->start = this_ts;
 		pqa->q2c->processed++;
 		pqa->q2c->outstanding--;
-		return 1;
+		return true;
 	} else {
-		return 0;
+		return false;
 	}
+}
+
+static gboolean proc_q_wrapper(gpointer key, gpointer value, gpointer data)
+{
+	return proc_q_impl(key, value, data) ? TRUE : FALSE;
 }
 
 static void restart_ongoing(struct q2c_data *q2c)
@@ -72,7 +77,7 @@ static void C(struct blk_io_trace *t, void *data)
 	if (t->time > q2c->end)
 		q2c->end = t->time;
 
-	g_hash_table_foreach_remove(q2c->qs, proc_q, &pqa);
+	g_hash_table_foreach_remove(q2c->qs, proc_q_wrapper, &pqa);
 	if (q2c->outstanding == 0 && q2c->processed > 0) {
 		q2c->q2c_time += q2c->end - q2c->start;
 		restart_ongoing(q2c);

@@ -77,13 +77,21 @@ static void init_oio_data(struct oio_data *oio, int n)
 	}
 }
 
-static int add_to_matrix(__u64 *__unused, struct blk_io_trace *t,
-			      struct i2c_data *i2c)
+static bool add_to_matrix_impl(gpointer __unused, gpointer t, gpointer i2c_arg)
 {
-	gsl_histogram_increment(i2c->oio[i2c->outstanding].op[IS_WRITE(t)],
-				(double)(t->bytes / BLK_SIZE));
+	struct i2c_data *i2c = (struct i2c_data *)i2c_arg;
+	struct blk_io_trace *trace = (struct blk_io_trace *)t;
 
-	return 0;
+	gsl_histogram_increment(i2c->oio[i2c->outstanding].op[IS_WRITE(trace)],
+				(double)(trace->bytes / BLK_SIZE));
+
+	return false;
+}
+
+static gboolean add_to_matrix_wrapper(gpointer key, gpointer value,
+				      gpointer data)
+{
+	return add_to_matrix_impl(key, value, data) ? TRUE : FALSE;
 }
 
 static void oio_change(struct i2c_data *i2c, struct blk_io_trace *t, int inc)
@@ -109,7 +117,7 @@ static void oio_change(struct i2c_data *i2c, struct blk_io_trace *t, int inc)
 	}
 	i2c->maxouts = MAX(i2c->maxouts, i2c->outstanding);
 
-	g_tree_foreach(i2c->is, (GTraverseFunc)add_to_matrix, i2c);
+	g_tree_foreach(i2c->is, add_to_matrix_wrapper, i2c);
 
 	write_outs(i2c, t);
 }
@@ -121,7 +129,7 @@ static void C(struct blk_io_trace *t, void *data)
 	if (g_tree_lookup(i2c->is, &t->sector) != NULL) {
 		g_tree_remove(i2c->is, &t->sector);
 
-		oio_change(i2c, t, FALSE);
+		oio_change(i2c, t, false);
 	}
 }
 
@@ -133,7 +141,7 @@ static void I(struct blk_io_trace *t, void *data)
 		DECL_DUP(struct blk_io_trace, new_t, t);
 		g_tree_insert(i2c->is, &new_t->sector, new_t);
 
-		oio_change(i2c, t, TRUE);
+		oio_change(i2c, t, true);
 	}
 }
 
