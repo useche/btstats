@@ -10,11 +10,18 @@
 
 #include <reqsize.h>
 #include <list_plugins.h>
-#include "include/vector.h"
+#include "include/bsd/queue.h"
 #include "include/sector_tree.h"
 
 #define DECL_ASSIGN_D2C(name,data)			\
 	struct d2c_data *name = (struct d2c_data *)data
+
+struct time_entry {
+    __u64 time;
+    SLIST_ENTRY(time_entry) entries;
+};
+
+SLIST_HEAD(time_list, time_entry);
 
 struct d2c_data
 {
@@ -22,8 +29,8 @@ struct d2c_data
 	__u32 processed;
 	
 	struct sector_tree_head *prospect_ds;
-	vector *dtimes;
-	vector *ctimes;
+	struct time_list *dtimes;
+	struct time_list *ctimes;
 
 	__u64 d2ctime;
 
@@ -53,46 +60,39 @@ static void D(const struct blk_io_trace *t, void *data)
 	}
 }
 
-static int comp_u64(const void *a, const void *b)
-{
-    const __u64 *ua = a;
-    const __u64 *ub = b;
-    if (*ua < *ub) return -1;
-    if (*ua > *ub) return 1;
-    return 0;
-}
-
 static void __account_reqs(struct d2c_data *d2c, int finished)
 {
 	d2c->outstanding--;
 	if(d2c->outstanding == 0 || finished) {
 		if(d2c->processed > 0) {
-			unsigned int i, j;
 			__u32 outs, maxouts;
 			
 			__u64 start, end;
 			
-			qsort(d2c->ctimes->data, vector_total(d2c->ctimes), sizeof(__u64), comp_u64);
-			qsort(d2c->dtimes->data, vector_total(d2c->dtimes), sizeof(__u64), comp_u64);
+            struct time_entry *d_it, *c_it;
+            d_it = SLIST_FIRST(d2c->dtimes);
+            c_it = SLIST_FIRST(d2c->ctimes);
 
-			i = j = maxouts = outs = 0;
-			while(i < (unsigned int)vector_total(d2c->dtimes)) {
-				if(*((__u64*)vector_get(d2c->dtimes,i)) <
-				   *((__u64*)vector_get(d2c->ctimes,j))) {
+			outs = maxouts = 0;
+			while(d_it != NULL && c_it != NULL) {
+				if(d_it->time < c_it->time) {
 					outs++;
 					maxouts = MAX(outs,maxouts);
-					i++;
+                    d_it = SLIST_NEXT(d_it, entries);
 				} else {
 					outs--;
-					j++;
+                    c_it = SLIST_NEXT(c_it, entries);
 				}
 			}
 			
 			d2c->maxouts = MAX(d2c->maxouts,maxouts);
 			
 			/* getting d2c time */
-			start = *((__u64*)vector_get(d2c->dtimes,0));
-			end = *((__u64*)vector_get(d2c->ctimes, vector_total(d2c->ctimes) - 1));
+			start = SLIST_FIRST(d2c->dtimes)->time;
+            struct time_entry *last = SLIST_FIRST(d2c->ctimes);
+            while(SLIST_NEXT(last, entries) != NULL)
+                last = SLIST_NEXT(last, entries);
+			end = last->time;
 
 			/* adding total time */
 			d2c->d2ctime += end - start;
@@ -101,12 +101,21 @@ static void __account_reqs(struct d2c_data *d2c, int finished)
 			d2c->processed = 0;
 			
 			/* empty arrays */
-			vector_remove_range(d2c->dtimes, 0, vector_total(d2c->dtimes));
-			vector_remove_range(d2c->ctimes, 0, vector_total(d2c->ctimes));
+            struct time_entry *te;
+            while(!SLIST_EMPTY(d2c->dtimes)) {
+                te = SLIST_FIRST(d2c->dtimes);
+                SLIST_REMOVE_HEAD(d2c->dtimes, entries);
+                free(te);
+            }
+            while(!SLIST_EMPTY(d2c->ctimes)) {
+                te = SLIST_FIRST(d2c->ctimes);
+                SLIST_REMOVE_HEAD(d2c->ctimes, entries);
+                free(te);
+            }
 		}
 		
 		assert(d2c->processed == 0);
-		assert(vector_total(d2c->dtimes) == 0 && vector_total(d2c->ctimes) == 0);
+		assert(SLIST_EMPTY(d2c->dtimes) && SLIST_EMPTY(d2c->ctimes));
 	}
 }
 
@@ -136,8 +145,13 @@ static void C(const struct blk_io_trace *t, void *data)
 				if(e < 0) error_exit("Error writing D2C detail file\n");
 			}
 			
-			vector_add(d2c->dtimes, &dtrace->time);
-			vector_add(d2c->ctimes, (void*)&t->time);
+            struct time_entry *d_te = malloc(sizeof(struct time_entry));
+            d_te->time = dtrace->time;
+            SLIST_INSERT_HEAD(d2c->dtimes, d_te, entries);
+
+            struct time_entry *c_te = malloc(sizeof(struct time_entry));
+            c_te->time = t->time;
+            SLIST_INSERT_HEAD(d2c->ctimes, c_te, entries);
 		}
 		
 		RB_REMOVE(sector_tree_head, d2c->prospect_ds, dtrace_entry);
@@ -210,10 +224,10 @@ void d2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *pia)
 
 	d2c->prospect_ds = malloc(sizeof(struct sector_tree_head));
     RB_INIT(sector_tree_head, d2c->prospect_ds);
-	d2c->dtimes = malloc(sizeof(vector));
-    vector_init(d2c->dtimes, sizeof(__u64));
-	d2c->ctimes = malloc(sizeof(vector));
-    vector_init(d2c->ctimes, sizeof(__u64));
+	d2c->dtimes = malloc(sizeof(struct time_list));
+    SLIST_INIT(d2c->dtimes);
+	d2c->ctimes = malloc(sizeof(struct time_list));
+    SLIST_INIT(d2c->ctimes);
 	d2c->req_dat = ps->plugs[REQ_SIZE_IND].data;
 	
 	/* open d2c detail file */
@@ -236,10 +250,21 @@ void d2c_destroy(struct plugin *p)
         free(se);
     }
     free(d2c->prospect_ds);
-	vector_free(d2c->dtimes);
+
+    struct time_entry *te;
+    while(!SLIST_EMPTY(d2c->dtimes)) {
+        te = SLIST_FIRST(d2c->dtimes);
+        SLIST_REMOVE_HEAD(d2c->dtimes, entries);
+        free(te);
+    }
     free(d2c->dtimes);
-	vector_free(d2c->ctimes);
+    while(!SLIST_EMPTY(d2c->ctimes)) {
+        te = SLIST_FIRST(d2c->ctimes);
+        SLIST_REMOVE_HEAD(d2c->ctimes, entries);
+        free(te);
+    }
     free(d2c->ctimes);
+
 	if(d2c->detail_f)
 		fclose(d2c->detail_f);
 	free(p->data);

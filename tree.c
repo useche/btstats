@@ -561,7 +561,7 @@ void _rb_set_right(const struct rb_type *t, void *node, void *right)
 void _rb_set_parent(const struct rb_type *t, void *node, void *parent)
 {
         struct rb_entry *rbe = rb_n2e(t, node);
-        struct rb_entry *rbp = (parent == NULL) ? NULL : rb_n2e(t, parent);
+        struct rb_entry *rbp = (parent == NULL) ? NULL : rb_e2n(t, parent);
 
         RBE_PARENT(rbe) = rbp;
 }

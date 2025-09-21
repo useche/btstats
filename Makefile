@@ -10,7 +10,7 @@ TRCREAD_SRCS = $(wildcard trace_reader/*.c)
 TRCREAD = $(patsubst %.c,%.o,$(TRCREAD_SRCS))
 
 # other sources
-OTHER_SRCS = utils.c vector.c hash.c sector_tree.c tree.c
+OTHER_SRCS = utils.c sector_tree.c tree.c
 OTHER_OBJS = $(patsubst %.c,%.o,$(OTHER_SRCS))
 
 APP_DEP=$(APP).o $(PLUGS) $(TRCREAD) $(OTHER_OBJS)
@@ -29,9 +29,9 @@ define CC
 endef
 endif
 
-INCLUDE=-I. -Istatplug/ -Iinclude/ -Itrace_reader/
+INCLUDE=`pkg-config --cflags gsl` -I. -Istatplug/ -Iinclude/ -Itrace_reader/
 CFLAGS=-Wall -Wextra -Werror -Wno-unused-parameter -std=gnu99 $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
-LDFLAGS=-lgsl -lgslcblas -lm
+LDFLAGS=`pkg-config --libs gsl`
 
 all: depend $(APP)
 

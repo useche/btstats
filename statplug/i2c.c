@@ -256,12 +256,12 @@ void i2c_ops_init(struct plugin_ops *po)
 	/* association of event int and function */
     struct event_entry *e1 = malloc(sizeof(struct event_entry));
     e1->event_key = __BLK_TA_COMPLETE;
-    e1->event_handler = C;
+    e1->event_handler = (event_func_t)C;
 	RB_INSERT(event_tree_head, po->event_tree, e1);
 
     struct event_entry *e2 = malloc(sizeof(struct event_entry));
     e2->event_key = __BLK_TA_INSERT;
-    e2->event_handler = I;
+    e2->event_handler = (event_func_t)I;
 	RB_INSERT(event_tree_head, po->event_tree, e2);
 }
 

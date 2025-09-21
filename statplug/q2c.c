@@ -9,14 +9,29 @@
 #include <plugins.h>
 #include <utils.h>
 #include <list_plugins.h>
-#include "include/hash.h"
+#include "include/bsd/tree.h"
 
 #define DECL_ASSIGN_Q2C(name,data)				\
 	struct q2c_data *name = (struct q2c_data *)data
 
+struct q_entry {
+    struct blk_io_trace *trace;
+    RB_ENTRY(q_entry) entry;
+};
+
+int q_entry_cmp(const struct q_entry *a, const struct q_entry *b) {
+    if (a->trace->sector < b->trace->sector) return -1;
+    if (a->trace->sector > b->trace->sector) return 1;
+    return 0;
+}
+
+RB_HEAD(q_tree_head, q_entry);
+RB_PROTOTYPE(q_tree_head, q_entry, entry, q_entry_cmp);
+RB_GENERATE(q_tree_head, q_entry, entry, q_entry_cmp);
+
 struct q2c_data 
 {
-	hash_table *qs;
+	struct q_tree_head *qs;
 
 	/* ongoing active period */
 	__u64 start;
@@ -40,49 +55,29 @@ struct proc_q_arg
 	struct q2c_data *q2c;
 };
 
-static int proc_q(void *key, void *value, void *pqap)
-{
-	struct blk_io_trace *t = (struct blk_io_trace *)value;
-	struct proc_q_arg *pqa = (struct proc_q_arg *)pqap;
-
-	__u64 this_s = BIT_START(t), this_e = BIT_END(t);
-	__u64 this_ts = t->time;
-
-	if(pqa->ts <= this_s && this_e <= pqa->te) {
-		if(this_ts < pqa->q2c->start)
-			pqa->q2c->start = this_ts;
-		pqa->q2c->processed++;
-		pqa->q2c->outstanding--;
-		return 1;
-	} else {
-		return 0;
-	}
-}
-
-static void restart_ongoing(struct q2c_data *q2c)
-{
-		/* restart ongoing period */
-		q2c->start = ~(0ULL);
-		q2c->end = 0;
-		q2c->processed = 0;
-}
-
 static void C(const struct blk_io_trace *t, void *data)
 {
 	DECL_ASSIGN_Q2C(q2c,data);
-	struct proc_q_arg pqa = {
-		BIT_START(t),
-		BIT_END(t),
-		q2c
-	};
+    struct q_entry find, *res;
+    find.trace = (struct blk_io_trace *)t;
+
+	res = RB_FIND(q_tree_head, q2c->qs, &find);
+	if(res) {
+        q2c->processed++;
+        q2c->outstanding--;
+		RB_REMOVE(q_tree_head, q2c->qs, res);
+		free(res->trace);
+		free(res);
+	}
 
 	if(t->time > q2c->end)
 		q2c->end = t->time;
 
-	hash_table_foreach_remove(q2c->qs,proc_q,&pqa);
 	if(q2c->outstanding==0 && q2c->processed>0) {
 		q2c->q2c_time += q2c->end - q2c->start;
-		restart_ongoing(q2c);
+		q2c->start = ~(0ULL);
+		q2c->end = 0;
+		q2c->processed = 0;
 	}
 }
 
@@ -93,11 +88,15 @@ static void Q(const struct blk_io_trace *t, void *data)
 	__u64 blks = t_blks(t);
 
 	DECL_DUP(struct blk_io_trace,new_t,t);
-	hash_table_insert(q2c->qs, new_t, new_t);
+    struct q_entry *new_qe = malloc(sizeof(struct q_entry));
+    new_qe->trace = new_t;
+	RB_INSERT(q_tree_head, q2c->qs, new_qe);
 	q2c->outstanding++;
 	q2c->q_reqs++;
 	q2c->q_total_size+=blks;
 	q2c->maxouts = MAX(q2c->maxouts, q2c->outstanding);
+    if (q2c->start == ~(0ULL))
+        q2c->start = t->time;
 }
 
 void q2c_add(void *data1, const void *data2) 
@@ -138,11 +137,12 @@ void q2c_print_results(const void *data)
 void q2c_init(struct plugin *p, struct plugin_set *__un1, struct plug_args *__un2)
 {
 	struct q2c_data *q2c = p->data = malloc(sizeof(struct q2c_data));
-	q2c->qs = hash_table_new(ptr_hash,
-			ptr_equal,
-			NULL,
-			free);
-	restart_ongoing(q2c);
+	q2c->qs = malloc(sizeof(struct q_tree_head));
+    RB_INIT(q_tree_head, q2c->qs);
+	q2c->start = ~(0ULL);
+	q2c->end = 0;
+	q2c->processed = 0;
+    q2c->outstanding = 0;
 	
 	q2c->q2c_time = q2c->maxouts = 0;
 	q2c->q_reqs = q2c->q_total_size = 0;
@@ -168,6 +168,12 @@ void q2c_ops_init(struct plugin_ops *po)
 void q2c_destroy(struct plugin *p)
 {
 	DECL_ASSIGN_Q2C(q2c,p->data);
-	hash_table_destroy(q2c->qs);
+    struct q_entry *qe, *next;
+    RB_FOREACH_SAFE(qe, q_tree_head, q2c->qs, next) {
+        RB_REMOVE(q_tree_head, q2c->qs, qe);
+        free(qe->trace);
+        free(qe);
+    }
+    free(q2c->qs);
 	free(p->data);
 }

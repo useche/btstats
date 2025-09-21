@@ -1,7 +1,7 @@
 #ifndef SECTOR_TREE_H
 #define SECTOR_TREE_H
 
-#include "include/bsd/tree.h"
+#include "bsd/tree.h"
 #include <blktrace_api.h>
 
 struct sector_entry {

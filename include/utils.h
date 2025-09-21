@@ -4,9 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <stdint.h>
-#include <sys/types.h> // for __u64
+#include <string.h>
 #include <asm/types.h>
+
+#define ALLOC_OBJ(name,type)			\
+	type *name = malloc(sizeof(type));
 
 #define error_exit(format, ...) \
   do { \
@@ -19,6 +21,9 @@
     perror(s); \
     exit(EXIT_FAILURE); \
   } while(0)
+
+#define IS_WRITE(t) ((t)->action & BLK_TC_ACT(BLK_TC_WRITE))
+#define BLK_SIZE 512
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))

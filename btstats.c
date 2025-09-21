@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -10,23 +11,41 @@
 #include <plugins.h>
 
 #include "include/utils.h"
-#include "include/hash.h"
-#include "include/vector.h"
+#include "include/bsd/queue.h"
+#include "include/bsd/tree.h"
 
+// MAX_HEAD is used for the head string in range_finish.
+// 256 seems like a reasonable size.
 #define MAX_HEAD 256
 
 struct time_range
 {
 	__u64 start;
 	__u64 end;
-
 	struct plugin_set *ps; /* used in analysis */
+    SLIST_ENTRY(time_range) entries;
 };
+
+SLIST_HEAD(time_range_list, time_range);
+
+struct dev_range_entry {
+    char *dev_name;
+    struct time_range_list *ranges;
+    RB_ENTRY(dev_range_entry) entry;
+};
+
+static int dev_range_cmp(const struct dev_range_entry *a, const struct dev_range_entry *b) {
+    return strcmp(a->dev_name, b->dev_name);
+}
+
+RB_HEAD(dev_range_tree, dev_range_entry);
+RB_PROTOTYPE(dev_range_tree, dev_range_entry, entry, dev_range_cmp);
+RB_GENERATE(dev_range_tree, dev_range_entry, entry, dev_range_cmp);
 
 struct args
 {
-	hash_table *devs_ranges;
-	int total;
+	struct dev_range_tree *devs_ranges;
+	bool total;
 	char *d2c_det;
 	unsigned trc_rdr;
 	char *i2c_oio;
@@ -69,7 +88,8 @@ void parse_file(char *filename, struct args *a)
 	FILE *f = fopen(filename,"r");
 	if(!f) perror_exit("Ranges file");
 
-	a->devs_ranges = hash_table_new(str_hash, str_equal, free, free);
+	a->devs_ranges = malloc(sizeof(struct dev_range_tree));
+    RB_INIT(dev_range_tree, a->devs_ranges);
 	memset(curdev,0,sizeof(curdev));
 
 	while(getline(&line,&len,f) > 0) {
@@ -78,13 +98,13 @@ void parse_file(char *filename, struct args *a)
 
 		if(strlen(no_com[0])!=0) {
 			if(no_com[0][0] == '@') {
-				strcpy(curdev,(no_com[0]+1));
+				strncpy(curdev,(no_com[0]+1), FILENAME_MAX -1);
 				last_start = 0;
 			} else {
 				double end;
-				struct time_range r;
-				vector *ranges = NULL;
-				char *dev = NULL;
+				struct time_range *r = malloc(sizeof(struct time_range));
+				struct dev_range_entry find, *res;
+                find.dev_name = curdev;
 
 				if(strlen(curdev)==0)
 					error_exit("Wrong trace name\n");
@@ -92,20 +112,20 @@ void parse_file(char *filename, struct args *a)
 				e = sscanf(no_com[0],"%lf",&end);
 				if(!e) error_exit("Wrong range\n");
 
-				r.start = DOUBLE_TO_NANO_ULL(last_start);
-				r.end = end==-1?UINT64_MAX:DOUBLE_TO_NANO_ULL(end);
+				r->start = DOUBLE_TO_NANO_ULL(last_start);
+				r->end = end==-1?UINT64_MAX:DOUBLE_TO_NANO_ULL(end);
 
-				dev = curdev;
-				ranges = hash_table_lookup(a->devs_ranges, dev);
+				res = RB_FIND(dev_range_tree, a->devs_ranges, &find);
 
-				if(!ranges) {
-					dev = strdup(curdev);
-					ranges = malloc(sizeof(vector));
-					vector_init(ranges, sizeof(struct time_range));
-					hash_table_insert(a->devs_ranges,dev,ranges);
+				if(!res) {
+                    res = malloc(sizeof(struct dev_range_entry));
+                    res->dev_name = strdup(curdev);
+                    res->ranges = malloc(sizeof(struct time_range_list));
+                    SLIST_INIT(res->ranges);
+					RB_INSERT(dev_range_tree, a->devs_ranges, res);
 				}
 
-				vector_add(ranges, &r);
+                SLIST_INSERT_HEAD(res->ranges, r, entries);
 
 				last_start = end;
 			}
@@ -121,14 +141,15 @@ void parse_dev_str(char **devs, struct args *a)
 {
 	int i, e;
 
-	a->devs_ranges = hash_table_new(str_hash, str_equal, free, free);
+	a->devs_ranges = malloc(sizeof(struct dev_range_tree));
+    RB_INIT(dev_range_tree, a->devs_ranges);
 
 	for(i=0; devs[i]; ++i) {
-		vector *ranges = NULL;
-		struct time_range r;
+		struct time_range *r = malloc(sizeof(struct time_range));
+        struct dev_range_entry find, *res;
 
-		char *dev = NULL;
 		char **dev_pair = str_split(devs[i],"@",2);
+        find.dev_name = dev_pair[0];
 
 		double d_start = 0;
 		double d_end = -1;
@@ -138,20 +159,20 @@ void parse_dev_str(char **devs, struct args *a)
 			if(!e) error_exit("Wrong devices or ranges\n");
 		}
 
-		r.start = DOUBLE_TO_NANO_ULL(d_start);
-		r.end = d_end==-1?UINT64_MAX:DOUBLE_TO_NANO_ULL(d_end);
+		r->start = DOUBLE_TO_NANO_ULL(d_start);
+		r->end = d_end==-1?UINT64_MAX:DOUBLE_TO_NANO_ULL(d_end);
 
-		dev = dev_pair[0];
-		ranges = hash_table_lookup(a->devs_ranges,dev);
+		res = RB_FIND(dev_range_tree, a->devs_ranges, &find);
 
-		if(!ranges) {
-			dev = strdup(dev_pair[0]);
-			ranges = malloc(sizeof(vector));
-			vector_init(ranges, sizeof(struct time_range));
-			hash_table_insert(a->devs_ranges,dev,ranges);
+		if(!res) {
+			res = malloc(sizeof(struct dev_range_entry));
+            res->dev_name = strdup(dev_pair[0]);
+            res->ranges = malloc(sizeof(struct time_range_list));
+            SLIST_INIT(res->ranges);
+			RB_INSERT(dev_range_tree, a->devs_ranges, res);
 		}
 
-		vector_add(ranges, &r);
+        SLIST_INSERT_HEAD(res->ranges, r, entries);
 
 		str_freev(dev_pair);
 	}
@@ -187,7 +208,7 @@ void handle_args(int argc, char **argv, struct args *a)
 			file = optarg;
 			break;
 		case 't':
-			a->total = 1;
+			a->total = true;
 			break;
 		case 'd':
 			a->d2c_det = optarg;
@@ -246,62 +267,61 @@ void range_finish(struct time_range *range,
 	plugin_set_destroy(ps);
 }
 
-void analyze_device(char *dev, vector *ranges,
+void analyze_device(char *dev, struct time_range_list *ranges,
 		struct plugin_set *ps,
 		struct plug_args *pa,
 		trace_reader_t read_next)
 {
-	int i;
 	struct blk_io_trace t;
 	struct trace *dt;
+    struct time_range *r;
 
 	/* init all plugin sets */
-	for(i = 0; i < vector_total(ranges); ++i) {
-		struct time_range *r = vector_get(ranges,i);
+    SLIST_FOREACH(r, ranges, entries) {
 		pa->end_range = r->end;
 		r->ps = plugin_set_create(pa);
 	}
 
 	/* read and collect stats */
 	dt = trace_create(dev);
-	while(read_next(dt,&t) && vector_total(ranges) > 0) {
-		i = 0;
-		while(i < vector_total(ranges)) {
-			struct time_range *r = vector_get(ranges,i);
-
+	while(read_next(dt,&t) && !SLIST_EMPTY(ranges)) {
+        struct time_range *r_safe;
+        SLIST_FOREACH_SAFE(r, ranges, entries, r_safe) {
 			if(t.time > r->end) {
 				range_finish(r,ps,r->ps,dev);
-				vector_delete_fast(ranges,i);
+                SLIST_REMOVE(ranges, r, time_range, entries);
+                free(r);
 			} else {
 				if(r->start <= t.time)
 					plugin_set_add_trace(r->ps,&t);
-
-				i++;
 			}
 		}
 	}
 	trace_destroy(dt);
 
 	/* finish the ps which range is beyond the end */
-	for(i = 0; i < vector_total(ranges); ++i) {
-		struct time_range *r = vector_get(ranges,i);
+    SLIST_FOREACH(r, ranges, entries) {
 		range_finish(r,ps,r->ps,dev);
 	}
 }
 
-void analyze_device_hash(void *dev_arg, void *ranges_arg, void *ar)
+void analyze_device_hash(struct dev_range_entry *dre, void *ar)
 {
-	char *dev = dev_arg;
-	vector *ranges = ranges_arg;
 	struct plugin_set *global_plugin = ((struct analyze_args *)ar)->ps;
 	struct plug_args *pa = ((struct analyze_args *)ar)->pa;
 	trace_reader_t rdr = ((struct analyze_args *)ar)->reader;
 
-	analyze_device(dev,ranges,global_plugin,pa,rdr);
+	analyze_device(dre->dev_name, dre->ranges, global_plugin, pa, rdr);
 
-	free(dev);
-	vector_free(ranges);
-	free(ranges);
+	free(dre->dev_name);
+    struct time_range *r;
+    while(!SLIST_EMPTY(dre->ranges)) {
+        r = SLIST_FIRST(dre->ranges);
+        SLIST_REMOVE_HEAD(dre->ranges, entries);
+        free(r);
+    }
+    free(dre->ranges);
+    free(dre);
 }
 
 int main(int argc, char **argv)
@@ -328,7 +348,10 @@ int main(int argc, char **argv)
 	ar.ps = global_plugin;
 	ar.pa = &pa;
 	ar.reader = reader[a.trc_rdr];
-	hash_table_foreach(a.devs_ranges,analyze_device_hash,&ar);
+    struct dev_range_entry *dre, *dre_safe;
+    RB_FOREACH_SAFE(dre, dev_range_tree, a.devs_ranges, dre_safe) {
+        analyze_device_hash(dre, &ar);
+    }
 
 	if(a.total) {
 		plugin_set_print(global_plugin,"All");
