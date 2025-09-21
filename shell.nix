@@ -2,7 +2,7 @@
 
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    gcc
+    clang
     glib
     gsl
     pkg-config
