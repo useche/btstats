@@ -26,6 +26,26 @@ struct TraceFile {
     event: blk_io_trace,
 }
 
+impl TraceFile {
+    fn new(path: &Path, native_trace: &mut i32) -> Result<Option<Self>, io::Error> {
+        let mut file = File::open(path)?;
+        match read_next_event_from_file(&mut file, native_trace)? {
+            Some(event) => Ok(Some(TraceFile { file, event })),
+            None => Ok(None),
+        }
+    }
+
+    fn update(&mut self, native_trace: &mut i32) -> Result<bool, io::Error> {
+        match read_next_event_from_file(&mut self.file, native_trace)? {
+            Some(event) => {
+                self.event = event;
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+}
+
 // A wrapper for the heap to allow min-heap behavior
 struct HeapItem(TraceFile);
 
@@ -85,9 +105,8 @@ impl TraceReader {
         let mut heap = BinaryHeap::new();
 
         for path in files {
-            let mut file = File::open(&path)?;
-            if let Some(event) = read_next_event(&mut file, &mut native_trace)? {
-                heap.push(HeapItem(TraceFile { file, event }));
+            if let Some(trace_file) = TraceFile::new(&path, &mut native_trace)? {
+                heap.push(HeapItem(trace_file));
             }
         }
 
@@ -111,8 +130,7 @@ impl TraceReader {
         if let Some(mut item) = self.heap.pop() {
             let event_to_return = item.0.event;
 
-            if let Some(next_event) = read_next_event(&mut item.0.file, &mut self.native_trace)? {
-                item.0.event = next_event;
+            if item.0.update(&mut self.native_trace)? {
                 item.0.event.time -= self.genesis;
                 self.heap.push(item);
             }
@@ -124,7 +142,7 @@ impl TraceReader {
     }
 }
 
-fn read_next_event(file: &mut File, native_trace: &mut i32) -> Result<Option<blk_io_trace>, io::Error> {
+fn read_next_event_from_file(file: &mut File, native_trace: &mut i32) -> Result<Option<blk_io_trace>, io::Error> {
     loop {
         let mut trace_buf = [0u8; std::mem::size_of::<blk_io_trace>()];
 
