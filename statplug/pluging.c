@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <asm/types.h>
 #include <stdio.h>
 
@@ -15,7 +16,7 @@ struct pluging_data {
 	__u64 nplugs;
 
 	__u64 plug_time;
-	gboolean plugged;
+	bool plugged;
 };
 
 static void P(struct blk_io_trace *t, void *data)
@@ -24,7 +25,7 @@ static void P(struct blk_io_trace *t, void *data)
 
 	if (!plug->plugged) {
 		plug->plug_time = t->time;
-		plug->plugged = TRUE;
+		plug->plugged = true;
 	}
 }
 
@@ -41,7 +42,7 @@ static void U(struct blk_io_trace *t, void *data)
 		plug->min = MIN(plug->min, time);
 		plug->max = MAX(plug->max, time);
 
-		plug->plugged = FALSE;
+		plug->plugged = false;
 		plug->plug_time = 0;
 	}
 }

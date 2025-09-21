@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <assert.h>
 #include <stdio.h>
 
@@ -42,7 +43,7 @@ static void D(struct blk_io_trace *t, void *data)
 	}
 }
 
-static void __account_reqs(struct d2c_data *d2c, gboolean finished)
+static void __account_reqs(struct d2c_data *d2c, bool finished)
 {
 	d2c->outstanding--;
 	if (d2c->outstanding == 0 || finished) {
@@ -124,7 +125,7 @@ static void C(struct blk_io_trace *t, void *data)
 		g_tree_remove(d2c->prospect_ds, &dtrace->sector);
 		g_free(dtrace);
 
-		__account_reqs(d2c, FALSE);
+		__account_reqs(d2c, false);
 	}
 }
 
@@ -141,7 +142,7 @@ static void R(struct blk_io_trace *t, void *data)
 		g_tree_remove(d2c->prospect_ds, &dtrace->sector);
 		g_free(dtrace);
 
-		__account_reqs(d2c, FALSE);
+		__account_reqs(d2c, false);
 	}
 }
 
@@ -157,7 +158,7 @@ void d2c_print_results(const void *data)
 {
 	DECL_ASSIGN_D2C(d2c, data);
 
-	__account_reqs(d2c, TRUE);
+	__account_reqs(d2c, true);
 
 	if (d2c->d2ctime > 0) {
 		double t_time_msec = ((double)d2c->d2ctime) / 1e6;
@@ -186,9 +187,9 @@ void d2c_init(struct plugin *p, struct plugin_set *ps, struct plug_args *pia)
 
 	d2c->prospect_ds = g_tree_new(comp_int64);
 	d2c->dtimes =
-		g_array_sized_new(FALSE, FALSE, sizeof(__u64), TENT_OUTS_RQS);
+		g_array_sized_new(false, false, sizeof(__u64), TENT_OUTS_RQS);
 	d2c->ctimes =
-		g_array_sized_new(FALSE, FALSE, sizeof(__u64), TENT_OUTS_RQS);
+		g_array_sized_new(false, false, sizeof(__u64), TENT_OUTS_RQS);
 	d2c->req_dat = ps->plugs[REQ_SIZE_IND].data;
 
 	/* open d2c detail file */
@@ -206,8 +207,8 @@ void d2c_destroy(struct plugin *p)
 	DECL_ASSIGN_D2C(d2c, p->data);
 
 	g_tree_destroy(d2c->prospect_ds);
-	g_array_free(d2c->dtimes, FALSE);
-	g_array_free(d2c->ctimes, FALSE);
+	g_array_free(d2c->dtimes, false);
+	g_array_free(d2c->ctimes, false);
 	if (d2c->detail_f)
 		fclose(d2c->detail_f);
 	g_free(p->data);

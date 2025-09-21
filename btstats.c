@@ -1,4 +1,5 @@
 #include <glib.h>
+#include <stdbool.h>
 #include <glib/gprintf.h>
 #include <string.h>
 #include <stdio.h>
@@ -21,7 +22,7 @@ struct time_range {
 
 struct args {
 	GHashTable *devs_ranges;
-	gboolean total;
+	bool total;
 	char *d2c_det;
 	unsigned trc_rdr;
 	char *i2c_oio;
@@ -99,7 +100,7 @@ void parse_file(char *filename, struct args *a)
 				if (!ranges) {
 					dev = g_strdup(curdev);
 					ranges = g_array_new(
-						FALSE, FALSE,
+						false, false,
 						sizeof(struct time_range));
 					g_hash_table_insert(a->devs_ranges, dev,
 							    ranges);
@@ -147,7 +148,7 @@ void parse_dev_str(char **devs, struct args *a)
 
 		if (!ranges) {
 			dev = g_strdup(dev_pair[0]);
-			ranges = g_array_new(FALSE, FALSE,
+			ranges = g_array_new(false, false,
 					     sizeof(struct time_range));
 			g_hash_table_insert(a->devs_ranges, dev, ranges);
 		}
@@ -189,7 +190,7 @@ void handle_args(int argc, char **argv, struct args *a)
 			file = optarg;
 			break;
 		case 't':
-			a->total = TRUE;
+			a->total = true;
 			break;
 		case 'd':
 			a->d2c_det = optarg;
@@ -297,7 +298,7 @@ void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer ar)
 	analyze_device(dev, ranges, global_plugin, pa, rdr);
 
 	free(dev);
-	g_array_free(ranges, TRUE);
+	g_array_free(ranges, true);
 }
 
 int main(int argc, char **argv)

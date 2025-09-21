@@ -1,5 +1,6 @@
 #include <asm/types.h>
 #include <glib.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <assert.h>
 #include <inttypes.h>
@@ -76,13 +77,13 @@ static void init_oio_data(struct oio_data *oio, int n)
 	}
 }
 
-static gboolean add_to_matrix(__u64 *__unused, struct blk_io_trace *t,
+static bool add_to_matrix(__u64 *__unused, struct blk_io_trace *t,
 			      struct i2c_data *i2c)
 {
 	gsl_histogram_increment(i2c->oio[i2c->outstanding].op[IS_WRITE(t)],
 				(double)(t->bytes / BLK_SIZE));
 
-	return FALSE;
+	return false;
 }
 
 static void oio_change(struct i2c_data *i2c, struct blk_io_trace *t, int inc)
@@ -120,7 +121,7 @@ static void C(struct blk_io_trace *t, void *data)
 	if (g_tree_lookup(i2c->is, &t->sector) != NULL) {
 		g_tree_remove(i2c->is, &t->sector);
 
-		oio_change(i2c, t, FALSE);
+		oio_change(i2c, t, false);
 	}
 }
 
@@ -132,7 +133,7 @@ static void I(struct blk_io_trace *t, void *data)
 		DECL_DUP(struct blk_io_trace, new_t, t);
 		g_tree_insert(i2c->is, &new_t->sector, new_t);
 
-		oio_change(i2c, t, TRUE);
+		oio_change(i2c, t, true);
 	}
 }
 

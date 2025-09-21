@@ -1,4 +1,5 @@
 #include <glib.h>
+#include <stdbool.h>
 #include <assert.h>
 #include <string.h>
 
@@ -8,22 +9,22 @@
 #include <blktrace_api.h>
 
 static struct blk_io_trace at;
-static gboolean send_p_d = FALSE;
+static bool send_p_d = false;
 static int out_reqs = 0;
 static __u64 blks;
 
-gboolean trace_ata_piix_read_next(const struct trace *dt,
+bool trace_ata_piix_read_next(const struct trace *dt,
 				  struct blk_io_trace *t)
 {
-	gboolean r;
+	bool r;
 
 	if (send_p_d) {
 		/* if we have a pending D event,
 		 * we first send this before the next one
 		 */
 		*t = at;
-		send_p_d = FALSE;
-		return TRUE;
+		send_p_d = false;
+		return true;
 	} else {
 reread:
 		r = trace_read_next(dt, t);
@@ -31,12 +32,12 @@ reread:
 
 		/* if the trace reach the end */
 		if (!r)
-			return FALSE;
+			return false;
 
 		switch (t->action & 0xffff) {
 		case __BLK_TA_COMPLETE:
 			if (out_reqs == 2) {
-				send_p_d = TRUE;
+				send_p_d = true;
 
 				/* setting the time to the next D
 					 * to be the time of the complete (ns)
@@ -72,6 +73,6 @@ reread:
 			out_reqs -= out_reqs > 0 ? 1 : 0;
 			break;
 		}
-		return TRUE;
+		return true;
 	}
 }
