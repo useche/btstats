@@ -2,6 +2,7 @@
 #include <glib.h>
 #include <stdio.h>
 #include <assert.h>
+#include <stdbool.h>
 
 #include <blktrace_api.h>
 #include <blktrace.h>
@@ -36,7 +37,7 @@ struct proc_q_arg {
 	struct q2c_data *q2c;
 };
 
-static gboolean proc_q(gpointer __unused, gpointer tp, gpointer pqap)
+static int proc_q(gpointer __unused, gpointer tp, gpointer pqap)
 {
 	struct blk_io_trace *t = (struct blk_io_trace *)tp;
 	struct proc_q_arg *pqa = (struct proc_q_arg *)pqap;
@@ -49,9 +50,9 @@ static gboolean proc_q(gpointer __unused, gpointer tp, gpointer pqap)
 			pqa->q2c->start = this_ts;
 		pqa->q2c->processed++;
 		pqa->q2c->outstanding--;
-		return TRUE;
+		return 1;
 	} else {
-		return FALSE;
+		return 0;
 	}
 }
 

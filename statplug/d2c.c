@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #include <plugins.h>
 #include <blktrace_api.h>
@@ -42,7 +43,7 @@ static void D(struct blk_io_trace *t, void *data)
 	}
 }
 
-static void __account_reqs(struct d2c_data *d2c, gboolean finished)
+static void __account_reqs(struct d2c_data *d2c, bool finished)
 {
 	d2c->outstanding--;
 	if (d2c->outstanding == 0 || finished) {
@@ -124,7 +125,7 @@ static void C(struct blk_io_trace *t, void *data)
 		g_tree_remove(d2c->prospect_ds, &dtrace->sector);
 		g_free(dtrace);
 
-		__account_reqs(d2c, FALSE);
+		__account_reqs(d2c, false);
 	}
 }
 
@@ -141,7 +142,7 @@ static void R(struct blk_io_trace *t, void *data)
 		g_tree_remove(d2c->prospect_ds, &dtrace->sector);
 		g_free(dtrace);
 
-		__account_reqs(d2c, FALSE);
+		__account_reqs(d2c, false);
 	}
 }
 
@@ -157,7 +158,7 @@ void d2c_print_results(const void *data)
 {
 	DECL_ASSIGN_D2C(d2c, data);
 
-	__account_reqs(d2c, TRUE);
+	__account_reqs(d2c, true);
 
 	if (d2c->d2ctime > 0) {
 		double t_time_msec = ((double)d2c->d2ctime) / 1e6;
