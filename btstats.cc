@@ -12,6 +12,12 @@
 
 #include <utils.h>
 
+#include <vector>
+#include <map>
+#include <string>
+#include <span>
+#include <string_view>
+
 struct time_range {
 	__u64 start;
 	__u64 end;
@@ -20,18 +26,12 @@ struct time_range {
 };
 
 struct args {
-	GHashTable *devs_ranges;
-	gboolean total;
-	char *d2c_det;
-	unsigned trc_rdr;
-	char *i2c_oio;
-	char *i2c_oio_hist;
-};
-
-struct analyze_args {
-	struct plugin_set *ps;
-	struct plug_args *pa;
-	trace_reader_t reader;
+	std::map<std::string, std::vector<time_range> > dev_ranges;
+	gboolean total = FALSE;
+	char *d2c_det = nullptr;
+	unsigned trc_rdr = 0;
+	char *i2c_oio = nullptr;
+	char *i2c_oio_hist = nullptr;
 };
 
 void usage_exit()
@@ -64,9 +64,6 @@ void parse_file(char *filename, struct args *a)
 	if (!f)
 		perror_exit("Ranges file");
 
-	a->devs_ranges = g_hash_table_new(g_str_hash, g_str_equal);
-	memset(curdev, 0, sizeof(curdev));
-
 	while (getline(&line, &len, f) > 0) {
 		char **no_com = g_strsplit(line, "#", 2);
 		no_com[0] = g_strstrip(no_com[0]);
@@ -78,8 +75,6 @@ void parse_file(char *filename, struct args *a)
 			} else {
 				double end;
 				struct time_range r;
-				GArray *ranges = NULL;
-				char *dev = NULL;
 
 				if (strlen(curdev) == 0)
 					error_exit("Wrong trace name\n");
@@ -92,20 +87,7 @@ void parse_file(char *filename, struct args *a)
 				r.end = end == -1 ? G_MAXUINT64 :
 						    DOUBLE_TO_NANO_ULL(end);
 
-				dev = curdev;
-				ranges = static_cast<GArray*>(g_hash_table_lookup(a->devs_ranges,
-							     dev));
-
-				if (!ranges) {
-					dev = g_strdup(curdev);
-					ranges = g_array_new(
-						FALSE, FALSE,
-						sizeof(struct time_range));
-					g_hash_table_insert(a->devs_ranges, dev,
-							    ranges);
-				}
-
-				g_array_append_val(ranges, r);
+				a->dev_ranges[curdev].push_back(r);
 
 				last_start = end;
 			}
@@ -121,13 +103,9 @@ void parse_dev_str(char **devs, struct args *a)
 {
 	int i, e;
 
-	a->devs_ranges = g_hash_table_new(g_str_hash, g_str_equal);
-
 	for (i = 0; devs[i]; ++i) {
-		GArray *ranges = NULL;
 		struct time_range r;
 
-		char *dev = NULL;
 		char **dev_pair = g_strsplit(devs[i], "@", 2);
 
 		double d_start = 0;
@@ -142,17 +120,7 @@ void parse_dev_str(char **devs, struct args *a)
 		r.start = DOUBLE_TO_NANO_ULL(d_start);
 		r.end = d_end == -1 ? G_MAXUINT64 : DOUBLE_TO_NANO_ULL(d_end);
 
-		dev = dev_pair[0];
-		ranges = static_cast<GArray*>(g_hash_table_lookup(a->devs_ranges, dev));
-
-		if (!ranges) {
-			dev = g_strdup(dev_pair[0]);
-			ranges = g_array_new(FALSE, FALSE,
-					     sizeof(struct time_range));
-			g_hash_table_insert(a->devs_ranges, dev, ranges);
-		}
-
-		g_array_append_val(ranges, r);
+		a->dev_ranges[dev_pair[0]].push_back(r);
 
 		g_strfreev(dev_pair);
 	}
@@ -162,8 +130,6 @@ void handle_args(int argc, char **argv, struct args *a)
 {
 	int c, r;
 	char *file = NULL;
-
-	memset(a, 0, sizeof(struct args));
 
 	while (1) {
 		int option_index = 0;
@@ -221,7 +187,7 @@ void handle_args(int argc, char **argv, struct args *a)
 }
 
 void range_finish(struct time_range *range, struct plugin_set *gps,
-		  struct plugin_set *ps, char *dev)
+		  struct plugin_set *ps, const char *dev)
 {
 	char head[MAX_HEAD];
 	char end_range[MAX_HEAD / 2];
@@ -242,32 +208,31 @@ void range_finish(struct time_range *range, struct plugin_set *gps,
 	plugin_set_destroy(ps);
 }
 
-void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps,
-		    struct plug_args *pa, trace_reader_t read_next)
+void analyze_device(const std::string &dev, std::vector<time_range> &ranges,
+		    struct plugin_set *ps, struct plug_args *pa,
+		    trace_reader_t read_next)
 {
 	unsigned i;
 	struct blk_io_trace t;
 	struct trace *dt;
 
 	/* init all plugin sets */
-	for (i = 0; i < ranges->len; ++i) {
-		struct time_range *r =
-			&g_array_index(ranges, struct time_range, i);
+	for (i = 0; i < ranges.size(); ++i) {
+		struct time_range *r = &ranges[i];
 		pa->end_range = r->end;
 		r->ps = plugin_set_create(pa);
 	}
 
 	/* read and collect stats */
-	dt = trace_create(dev);
-	while (read_next(dt, &t) && ranges->len > 0) {
+	dt = trace_create(dev.c_str());
+	while (read_next(dt, &t) && ranges.size() > 0) {
 		i = 0;
-		while (i < ranges->len) {
-			struct time_range *r =
-				&g_array_index(ranges, struct time_range, i);
+		while (i < ranges.size()) {
+			struct time_range *r = &ranges[i];
 
 			if (t.time > r->end) {
-				range_finish(r, ps, r->ps, dev);
-				g_array_remove_index_fast(ranges, i);
+				range_finish(r, ps, r->ps, dev.c_str());
+				ranges.erase(ranges.begin() + i);
 			} else {
 				if (r->start <= t.time)
 					plugin_set_add_trace(r->ps, &t);
@@ -279,25 +244,10 @@ void analyze_device(char *dev, GArray *ranges, struct plugin_set *ps,
 	trace_destroy(dt);
 
 	/* finish the ps which range is beyond the end */
-	for (i = 0; i < ranges->len; ++i) {
-		struct time_range *r =
-			&g_array_index(ranges, struct time_range, i);
-		range_finish(r, ps, r->ps, dev);
+	for (i = 0; i < ranges.size(); ++i) {
+		struct time_range *r = &ranges[i];
+		range_finish(r, ps, r->ps, dev.c_str());
 	}
-}
-
-void analyze_device_hash(gpointer dev_arg, gpointer ranges_arg, gpointer ar)
-{
-	char *dev = static_cast<char *>(dev_arg);
-	GArray *ranges = static_cast<GArray *>(ranges_arg);
-	struct plugin_set *global_plugin = ((struct analyze_args *)ar)->ps;
-	struct plug_args *pa = ((struct analyze_args *)ar)->pa;
-	trace_reader_t rdr = ((struct analyze_args *)ar)->reader;
-
-	analyze_device(dev, ranges, global_plugin, pa, rdr);
-
-	free(dev);
-	g_array_free(ranges, TRUE);
 }
 
 int main(int argc, char **argv)
@@ -305,7 +255,6 @@ int main(int argc, char **argv)
 	struct args a;
 	struct plug_args pa;
 
-	struct analyze_args ar;
 	struct plugin_set *global_plugin = NULL;
 
 	handle_args(argc, argv, &a);
@@ -321,10 +270,10 @@ int main(int argc, char **argv)
 	pa.i2c_oio_hist_f = a.i2c_oio_hist;
 
 	/* analyze each device with its ranges */
-	ar.ps = global_plugin;
-	ar.pa = &pa;
-	ar.reader = reader[a.trc_rdr];
-	g_hash_table_foreach(a.devs_ranges, analyze_device_hash, &ar);
+	for (auto &[dev, ranges] : a.dev_ranges) {
+		analyze_device(dev, ranges, global_plugin, &pa,
+			       reader[a.trc_rdr]);
+	}
 
 	if (a.total) {
 		plugin_set_print(global_plugin, "All");

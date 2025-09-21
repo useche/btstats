@@ -10,7 +10,7 @@ TRCREAD_SRCS = $(wildcard trace_reader/*.c)
 TRCREAD = $(patsubst %.c,%.o,$(TRCREAD_SRCS))
 
 APP_DEP=$(APP).o $(PLUGS) $(TRCREAD)
-SRCS=$(APP).c $(PLUG_SRCS) $(TRCREAD_SRCS)
+SRCS=$(APP).cc $(PLUG_SRCS) $(TRCREAD_SRCS)
 
 COMPILER=c++
 
@@ -26,7 +26,9 @@ endef
 endif
 
 INCLUDE=`pkg-config --cflags glib-2.0` -I. -Istatplug/ -Iinclude/ -Itrace_reader/
-CFLAGS=-Wall -Wextra -Werror -Wno-unused-parameter -std=c++20 $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -fpermissive
+COMMON_FLAGS=-Wall -Wextra -Werror -Wno-unused-parameter $(OPT_OR_DBG) $(INCLUDE) -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -fpermissive
+CFLAGS=$(COMMON_FLAGS)
+CXXFLAGS=$(COMMON_FLAGS) -std=c++20
 LDFLAGS=`pkg-config --libs glib-2.0 gsl`
 
 all: depend $(APP)
@@ -40,7 +42,7 @@ clean:
 	rm -rf $(APP) $(APP_DEP) .depend
 
 depend:
-	@$(CC) -MM $(CFLAGS) $(SRCS) 1> .depend
+	@$(CC) -MM $(CXXFLAGS) $(SRCS) 1> .depend
 
 ifneq ($(wildcard .depend),)
 include .depend
