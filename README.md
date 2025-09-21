@@ -138,10 +138,17 @@ seq2.blktrace.0 exist corresponding to the blktrace files.
 		200
 		400
 
-Development Environment
------------------------
+Requirements
+------------
 
-This project uses Nix to manage its development environment and dependencies.
+This version of btstats strongly use glib and gsl libraries. Make sure to have
+this before trying to compile (Ubuntu: `libglib2.0-dev` and `libgsl-dev`).
+
+Using Nix
+---------
+
+This project can use Nix to manage its development environment and
+dependencies.
 
 To enter the development shell with all necessary tools and libraries
 (including `gcc`, `glib`, `gsl`, `pkg-config`, and `bear`), simply run:
@@ -164,12 +171,6 @@ the Nix development shell:
     ```
     This will create a `compile_commands.json` file in the project root.
 
-Requirements
-------------
-
-This version of btstats strongly use glib and gsl libraries. Make sure to have
-this before trying to compile (Ubuntu: `libglib2.0-dev` and `libgsl-dev`).
-
 Plugin Development
 ------------------
 
@@ -180,4 +181,5 @@ the case of _reqsize_.
 License
 -------
 
-BTstats is distributed under the ISC license. You can find details in the LICENSE file.
+BTstats is distributed under the ISC license. You can find details in the
+LICENSE file.
