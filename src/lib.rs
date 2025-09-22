@@ -20,15 +20,22 @@ const fn BLK_TC_ACT(act: u32) -> u32 {
 }
 const __BLK_TA_QUEUE: u32 = 1;
 
+#[derive(Clone, Copy, PartialEq)]
+enum Endianness {
+    Unknown,
+    Native,
+    NonNative,
+}
+
 struct TraceFile {
     file: File,
-    native_trace: i32,
+    endianness: Endianness,
 }
 
 impl TraceFile {
     fn new(path: &Path) -> Result<Self, io::Error> {
         let file = File::open(path)?;
-        Ok(TraceFile { file, native_trace: -1 })
+        Ok(TraceFile { file, endianness: Endianness::Unknown })
     }
 }
 
@@ -43,11 +50,11 @@ impl Iterator for TraceFile {
                 Ok(()) => {
                     let mut trace: blk_io_trace = unsafe { std::mem::transmute(trace_buf) };
 
-                    if self.native_trace == -1 {
-                        self.native_trace = check_data_endianness(trace.magic);
+                    if self.endianness == Endianness::Unknown {
+                        self.endianness = check_data_endianness(trace.magic);
                     }
 
-                    if self.native_trace == 0 {
+                    if self.endianness == Endianness::NonNative {
                         correct_endianness(&mut trace);
                     }
 
@@ -61,9 +68,11 @@ impl Iterator for TraceFile {
                         }
                     }
 
-                    if !not_real_event(&trace) {
-                        return Some(Ok(trace));
+                    if not_real_event(&trace) {
+                        continue;
                     }
+
+                    return Some(Ok(trace));
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => return None,
                 Err(e) => return Some(Err(e)),
@@ -110,7 +119,7 @@ impl TraceReader {
         let basename = path.file_name().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid device path"))?.to_str().unwrap();
         let prefix = format!("{}.blktrace.", basename);
 
-        let heap: BinaryHeap<HeapItem> = fs::read_dir(dir)?
+        let files: Vec<_> = fs::read_dir(dir)?
             .filter_map(Result::ok)
             .map(|e| e.path())
             .filter(|p| p.is_file())
@@ -119,30 +128,38 @@ impl TraceReader {
                     .and_then(|s| s.to_str())
                     .map_or(false, |s| s.starts_with(&prefix))
             })
-            .map(|p| TraceFile::new(&p))
-            .filter_map(Result::ok)
-            .filter_map(|mut it| it.next().map(|e| (it, e)))
-            .filter_map(|(it, e)| e.ok().map(|e| (it, e)))
-            .map(|(it, e)| HeapItem { event: e, trace_file_iterator: it })
             .collect();
 
-        if heap.is_empty() {
+        if files.is_empty() {
             return Err(io::Error::new(io::ErrorKind::NotFound, "No trace files found"));
         }
 
-        let genesis = heap.peek().map_or(0, |item| item.event.time);
+        let items: Result<Vec<Option<HeapItem>>, io::Error> = files.into_iter()
+            .map(|p| {
+                let mut trace_file_iterator = TraceFile::new(&p)?;
+                if let Some(event_result) = trace_file_iterator.next() {
+                    let event = event_result?;
+                    Ok(Some(HeapItem { event, trace_file_iterator }))
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect();
 
-        let adjusted_heap: BinaryHeap<HeapItem> = heap.into_vec().into_iter().map(|mut item| {
+        let pre_genesis_heap: BinaryHeap<HeapItem> = items?.into_iter().filter_map(|x| x).collect();
+
+        let genesis = pre_genesis_heap.peek().map_or(0, |item| item.event.time);
+
+        let heap: BinaryHeap<HeapItem> = pre_genesis_heap.into_vec().into_iter().map(|mut item| {
             item.event.time -= genesis;
             item
         }).collect();
 
         Ok(TraceReader {
-            heap: adjusted_heap,
+            heap,
             genesis,
         })
     }
-
 }
 
 impl Iterator for TraceReader {
@@ -176,13 +193,13 @@ fn not_real_event(t: &blk_io_trace) -> bool {
     (t.action & BLK_TC_ACT(BLK_TC_DRV_DATA)) != 0
 }
 
-fn check_data_endianness(magic: u32) -> i32 {
+fn check_data_endianness(magic: u32) -> Endianness {
     if (magic & 0xffffff00) as u32 == BLK_IO_TRACE_MAGIC {
-        1
+        Endianness::Native
     } else if u32::from_be(magic) & 0xffffff00 == BLK_IO_TRACE_MAGIC {
-        0
+        Endianness::NonNative
     } else {
-        -1
+        Endianness::Unknown
     }
 }
 
