@@ -29,13 +29,13 @@ enum Endianness {
     Little,
 }
 
-pub struct TraceFile {
+struct TraceFile {
     file: File,
     endianness: Endianness,
 }
 
 impl TraceFile {
-    pub fn new(path: &Path) -> Result<Self, io::Error> {
+    fn new(path: &Path) -> Result<Self, io::Error> {
         Ok(TraceFile {
             file: File::open(path)?,
             endianness: Endianness::Unknown,
