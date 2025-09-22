@@ -111,12 +111,62 @@ impl PartialEq for HeapItem {
 
 impl Eq for HeapItem {}
 
+/// Reads and merges `blktrace` trace files for a block device.
+///
+/// `blktrace` produces one file per CPU, and this reader will merge them
+/// in order of the events' timestamps. It acts as an iterator, yielding
+/// `blk_io_trace` events.
+///
+/// # Example
+///
+/// ```no_run
+/// use blktrace_reader::{TraceReader, format_trace, blk_io_trace};
+/// use std::fs::File;
+/// use std::io::Write;
+/// use tempfile::tempdir;
+///
+/// // This example simulates the trace files that blktrace would create.
+/// let dir = tempdir().unwrap();
+/// let path = dir.path();
+///
+/// // Create a dummy blk_io_trace event.
+/// let mut trace: blk_io_trace = unsafe { std::mem::zeroed() };
+/// trace.magic = 0x65617470; // A valid magic number
+/// trace.time = 12345;
+///
+/// // Write the event to a dummy trace file.
+/// let mut file = File::create(path.join("test.blktrace.0")).unwrap();
+/// file.write_all(unsafe {
+///     std::slice::from_raw_parts(
+///         &trace as *const _ as *const u8,
+///         std::mem::size_of::<blk_io_trace>(),
+///     )
+/// }).unwrap();
+///
+/// // Now, use TraceReader to read the events.
+/// let device_path = path.join("test").to_str().unwrap().to_string();
+/// let reader = TraceReader::new(&device_path).unwrap();
+///
+/// for event_result in reader {
+///     let event = event_result.unwrap();
+///     println!("{}", format_trace(&event));
+/// }
+/// ```
 pub struct TraceReader {
     heap: BinaryHeap<HeapItem>,
     genesis: u64,
 }
 
 impl TraceReader {
+    /// Creates a new `TraceReader`.
+    ///
+    /// This function finds all `blktrace` files for a given device and
+    /// prepares to read them. The `device_path` should be the path to the
+    /// block device (e.g., "/dev/sda"). The function will look for files
+    /// with the pattern `sda.blktrace.*` in the same directory.
+    ///
+    /// Returns an `io::Error` if no trace files are found or if they
+    /// cannot be read.
     pub fn new(device_path: &str) -> Result<Self, io::Error> {
         let path = Path::new(device_path);
         let dir = path
@@ -270,6 +320,28 @@ fn correct_endianness(trace: &mut blk_io_trace, endianness: Endianness) {
     }
 }
 
+/// Formats a `blk_io_trace` event into a human-readable string.
+///
+/// The format is designed to be similar to the output of the `btt` tool.
+///
+/// # Example
+///
+/// ```
+/// use blktrace_reader::{format_trace, blk_io_trace};
+///
+/// let mut trace: blk_io_trace = unsafe { std::mem::zeroed() };
+/// trace.time = 1234567890;
+/// trace.sequence = 1;
+/// trace.pid = 123;
+/// trace.cpu = 2;
+/// trace.sector = 1024;
+/// trace.bytes = 4096;
+/// // Action: Queue, Write
+/// trace.action = (2 << 16) | 1;
+///
+/// let formatted = format_trace(&trace);
+/// assert_eq!(formatted, "2,123 1 1.234567890 Q W 0 1024 + 4096");
+/// ```
 pub fn format_trace(trace: &blk_io_trace) -> String {
     let rw = if (trace.action & BLK_TC_ACT(BLK_TC_WRITE)) != 0 {
         "W"
