@@ -22,15 +22,20 @@ const __BLK_TA_QUEUE: u32 = 1;
 
 struct TraceFile {
     file: File,
+    native_trace: i32,
 }
 
 impl TraceFile {
     fn new(path: &Path) -> Result<Self, io::Error> {
         let file = File::open(path)?;
-        Ok(TraceFile { file })
+        Ok(TraceFile { file, native_trace: -1 })
     }
+}
 
-    fn next_event(&mut self, native_trace: &mut i32) -> Result<Option<blk_io_trace>, io::Error> {
+impl Iterator for TraceFile {
+    type Item = Result<blk_io_trace, io::Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
         loop {
             let mut trace_buf = [0u8; std::mem::size_of::<blk_io_trace>()];
 
@@ -38,36 +43,39 @@ impl TraceFile {
                 Ok(()) => {
                     let mut trace: blk_io_trace = unsafe { std::mem::transmute(trace_buf) };
 
-                    if *native_trace == -1 {
-                        *native_trace = check_data_endianness(trace.magic);
+                    if self.native_trace == -1 {
+                        self.native_trace = check_data_endianness(trace.magic);
                     }
 
-                    if *native_trace == 0 {
+                    if self.native_trace == 0 {
                         correct_endianness(&mut trace);
                     }
 
                     if (trace.magic & 0xffffff00) as u32 != BLK_IO_TRACE_MAGIC {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "Bad trace magic"));
+                        return Some(Err(io::Error::new(io::ErrorKind::InvalidData, "Bad trace magic")));
                     }
 
                     if trace.pdu_len > 0 {
-                        self.file.seek(SeekFrom::Current(trace.pdu_len as i64))?;
+                        if let Err(e) = self.file.seek(SeekFrom::Current(trace.pdu_len as i64)) {
+                            return Some(Err(e));
+                        }
                     }
 
                     if !not_real_event(&trace) {
-                        return Ok(Some(trace));
+                        return Some(Ok(trace));
                     }
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
-                Err(e) => return Err(e),
+                Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => return None,
+                Err(e) => return Some(Err(e)),
             }
         }
     }
 }
 
+
 struct HeapItem {
     event: blk_io_trace,
-    trace_file: TraceFile,
+    trace_file_iterator: TraceFile,
 }
 
 impl Ord for HeapItem {
@@ -93,7 +101,6 @@ impl Eq for HeapItem {}
 pub struct TraceReader {
     heap: BinaryHeap<HeapItem>,
     genesis: u64,
-    native_trace: i32,
 }
 
 impl TraceReader {
@@ -103,62 +110,62 @@ impl TraceReader {
         let basename = path.file_name().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid device path"))?.to_str().unwrap();
         let prefix = format!("{}.blktrace.", basename);
 
-        let mut files = Vec::new();
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_file() {
-                if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                    if filename.starts_with(&prefix) {
-                        files.push(path.to_path_buf());
-                    }
-                }
-            }
-        }
+        let heap: BinaryHeap<HeapItem> = fs::read_dir(dir)?
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.is_file())
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|s| s.to_str())
+                    .map_or(false, |s| s.starts_with(&prefix))
+            })
+            .map(|p| TraceFile::new(&p))
+            .filter_map(Result::ok)
+            .filter_map(|mut it| it.next().map(|e| (it, e)))
+            .filter_map(|(it, e)| e.ok().map(|e| (it, e)))
+            .map(|(it, e)| HeapItem { event: e, trace_file_iterator: it })
+            .collect();
 
-        if files.is_empty() {
+        if heap.is_empty() {
             return Err(io::Error::new(io::ErrorKind::NotFound, "No trace files found"));
-        }
-
-        let mut native_trace = -1;
-        let mut heap = BinaryHeap::new();
-
-        for path in files {
-            let mut trace_file = TraceFile::new(&path)?;
-            if let Some(event) = trace_file.next_event(&mut native_trace)? {
-                heap.push(HeapItem { event, trace_file });
-            }
         }
 
         let genesis = heap.peek().map_or(0, |item| item.event.time);
 
-        // Adjust timestamps relative to genesis
-        let mut adjusted_heap = BinaryHeap::new();
-        while let Some(mut item) = heap.pop() {
+        let adjusted_heap: BinaryHeap<HeapItem> = heap.into_vec().into_iter().map(|mut item| {
             item.event.time -= genesis;
-            adjusted_heap.push(item);
-        }
+            item
+        }).collect();
 
         Ok(TraceReader {
             heap: adjusted_heap,
             genesis,
-            native_trace,
         })
     }
 
-    pub fn read_trace(&mut self) -> Result<Option<blk_io_trace>, io::Error> {
+}
+
+impl Iterator for TraceReader {
+    type Item = Result<blk_io_trace, io::Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
         if let Some(mut item) = self.heap.pop() {
             let event_to_return = item.event;
 
-            if let Some(next_event) = item.trace_file.next_event(&mut self.native_trace)? {
-                item.event = next_event;
-                item.event.time -= self.genesis;
-                self.heap.push(item);
+            if let Some(next_event_result) = item.trace_file_iterator.next() {
+                match next_event_result {
+                    Ok(mut next_event) => {
+                        next_event.time -= self.genesis;
+                        item.event = next_event;
+                        self.heap.push(item);
+                    }
+                    Err(e) => return Some(Err(e)),
+                }
             }
 
-            Ok(Some(event_to_return))
+            Some(Ok(event_to_return))
         } else {
-            Ok(None)
+            None
         }
     }
 }
@@ -278,15 +285,16 @@ mod tests {
         let mut file2 = fs::File::create(path.join("test.blktrace.1")).unwrap();
         file2.write_all(&unsafe { std::mem::transmute::<_, [u8; 48]>(trace2) }).unwrap();
 
-        let mut reader = TraceReader::new(path.join("test").to_str().unwrap()).unwrap();
+        let reader = TraceReader::new(path.join("test").to_str().unwrap()).unwrap();
+        let mut events = reader.map(Result::unwrap);
 
-        let event1 = reader.read_trace().unwrap().unwrap();
-        assert_eq!(event1.sequence, 2); // from file 2, time 100
+        let event1 = events.next().unwrap();
+        assert_eq!(event1.sequence, 2);
 
-        let event2 = reader.read_trace().unwrap().unwrap();
-        assert_eq!(event2.sequence, 1); // from file 1, time 200
+        let event2 = events.next().unwrap();
+        assert_eq!(event2.sequence, 1);
 
-        assert!(reader.read_trace().unwrap().is_none());
+        assert!(events.next().is_none());
     }
 
     #[test]
@@ -294,5 +302,29 @@ mod tests {
         let trace = get_test_trace(1, 1234567890);
         let formatted = format_trace(&trace);
         assert_eq!(formatted, "2,123 1 1.234567890 Q W 0 1024 + 4096");
+    }
+
+    #[test]
+    fn test_multi_file_endianness() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+
+        // File 1: native endian
+        let trace1 = get_test_trace(1, 200);
+        let mut file1 = fs::File::create(path.join("test.blktrace.0")).unwrap();
+        file1.write_all(&unsafe { std::mem::transmute::<_, [u8; 48]>(trace1) }).unwrap();
+
+        // File 2: swapped endian
+        let mut trace2 = get_test_trace(2, 100);
+        correct_endianness(&mut trace2);
+        let mut file2 = fs::File::create(path.join("test.blktrace.1")).unwrap();
+        file2.write_all(&unsafe { std::mem::transmute::<_, [u8; 48]>(trace2) }).unwrap();
+
+        let reader = TraceReader::new(path.join("test").to_str().unwrap()).unwrap();
+        let events: Vec<_> = reader.map(Result::unwrap).collect();
+
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].sequence, 2);
+        assert_eq!(events[1].sequence, 1);
     }
 }
