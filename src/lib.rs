@@ -150,11 +150,9 @@ impl TraceReader {
             })
             .collect();
 
-        let pre_genesis_heap: BinaryHeap<HeapItem> = items?.into_iter().filter_map(|x| x).collect();
-
-        let genesis = pre_genesis_heap.peek().map_or(0, |item| item.event.time);
-
-        let heap: BinaryHeap<HeapItem> = pre_genesis_heap.into_vec().into_iter().map(|mut item| {
+        let items: Vec<HeapItem> = items?.into_iter().filter_map(|x| x).collect();
+        let genesis = items.iter().min_by_key(|item| item.event.time).map_or(0, |item| item.event.time);
+        let heap: BinaryHeap<HeapItem> = items.into_iter().map(|mut item| {
             item.event.time -= genesis;
             item
         }).collect();
