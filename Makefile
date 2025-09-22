@@ -12,7 +12,7 @@ TRCREAD = $(patsubst %.c,%.o,$(TRCREAD_SRCS))
 APP_DEP=$(APP).o $(PLUGS) $(TRCREAD)
 SRCS=$(APP).c $(PLUG_SRCS) $(TRCREAD_SRCS)
 
-COMPILER=gcc
+COMPILER=cc
 
 # If DEBUG defined, then -ggdb used
 ifdef DEBUG

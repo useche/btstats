@@ -2,10 +2,15 @@
 
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    gcc
+    clang
+    libclang
     glib
     gsl
     pkg-config
     bear
   ];
+
+  shellHook = ''
+    export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
+  '';
 }
