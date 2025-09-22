@@ -24,7 +24,8 @@ const __BLK_TA_QUEUE: u32 = 1;
 enum Endianness {
     Unknown,
     Native,
-    NonNative,
+    Big,
+    Little,
 }
 
 struct TraceFile {
@@ -58,9 +59,7 @@ impl Iterator for TraceFile {
                 Ok(()) => {
                     let mut trace: blk_io_trace = unsafe { std::mem::transmute(trace_buf) };
 
-                    if self.endianness == Endianness::NonNative {
-                        correct_endianness(&mut trace);
-                    }
+                    correct_endianness(&mut trace, self.endianness);
 
                     if (trace.magic & 0xffffff00) as u32 != BLK_IO_TRACE_MAGIC {
                         return Some(Err(io::Error::new(io::ErrorKind::InvalidData, "Bad trace magic")));
@@ -138,20 +137,22 @@ impl TraceReader {
             return Err(io::Error::new(io::ErrorKind::NotFound, "No trace files found"));
         }
 
-        let items: Result<Vec<Option<HeapItem>>, io::Error> = files.into_iter()
+        let items: Result<Vec<_>, _> = files.into_iter()
             .map(|p| {
-                let mut trace_file_iterator = TraceFile::new(&p)?;
-                if let Some(event_result) = trace_file_iterator.next() {
-                    let event = event_result?;
-                    Ok(Some(HeapItem { event, trace_file_iterator }))
-                } else {
-                    Ok(None)
-                }
+                TraceFile::new(&p).and_then(|mut it| {
+                    it.next()
+                        .map(|e| e.map(|event| HeapItem { event, trace_file_iterator: it }))
+                        .transpose()
+                })
             })
             .collect();
 
         let items: Vec<HeapItem> = items?.into_iter().filter_map(|x| x).collect();
-        let genesis = items.iter().min_by_key(|item| item.event.time).map_or(0, |item| item.event.time);
+
+        let genesis = items.iter().min_by_key(|item| item.event.time)
+            .map(|item| item.event.time)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "No valid trace events found"))?;
+
         let heap: BinaryHeap<HeapItem> = items.into_iter().map(|mut item| {
             item.event.time -= genesis;
             item
@@ -168,24 +169,25 @@ impl Iterator for TraceReader {
     type Item = Result<blk_io_trace, io::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(mut item) = self.heap.pop() {
-            let event_to_return = item.event;
-
-            if let Some(next_event_result) = item.trace_file_iterator.next() {
-                match next_event_result {
-                    Ok(mut next_event) => {
-                        next_event.time -= self.genesis;
-                        item.event = next_event;
-                        self.heap.push(item);
-                    }
-                    Err(e) => return Some(Err(e)),
-                }
-            }
-
-            Some(Ok(event_to_return))
-        } else {
-            None
+        if self.heap.is_empty() {
+            return None;
         }
+
+        let mut item = self.heap.pop().unwrap();
+        let event_to_return = item.event;
+
+        if let Some(next_event_result) = item.trace_file_iterator.next() {
+            match next_event_result {
+                Ok(mut next_event) => {
+                    next_event.time -= self.genesis;
+                    item.event = next_event;
+                    self.heap.push(item);
+                }
+                Err(e) => return Some(Err(e)),
+            }
+        }
+
+        Some(Ok(event_to_return))
     }
 }
 
@@ -199,24 +201,40 @@ fn check_data_endianness(magic: u32) -> Endianness {
     if (magic & 0xffffff00) as u32 == BLK_IO_TRACE_MAGIC {
         Endianness::Native
     } else if u32::from_be(magic) & 0xffffff00 == BLK_IO_TRACE_MAGIC {
-        Endianness::NonNative
+        Endianness::Big
+    } else if u32::from_le(magic) & 0xffffff00 == BLK_IO_TRACE_MAGIC {
+        Endianness::Little
     } else {
         Endianness::Unknown
     }
 }
 
-fn correct_endianness(trace: &mut blk_io_trace) {
-    trace.magic = u32::from_be(trace.magic);
-    trace.sequence = u32::from_be(trace.sequence);
-    trace.time = u64::from_be(trace.time);
-    trace.sector = u64::from_be(trace.sector);
-    trace.bytes = u32::from_be(trace.bytes);
-    trace.action = u32::from_be(trace.action);
-    trace.pid = u32::from_be(trace.pid);
-    trace.device = u32::from_be(trace.device);
-    trace.cpu = u32::from_be(trace.cpu);
-    trace.error = u16::from_be(trace.error);
-    trace.pdu_len = u16::from_be(trace.pdu_len);
+fn correct_endianness(trace: &mut blk_io_trace, endianness: Endianness) {
+    if endianness == Endianness::Big {
+        trace.magic = u32::from_be(trace.magic);
+        trace.sequence = u32::from_be(trace.sequence);
+        trace.time = u64::from_be(trace.time);
+        trace.sector = u64::from_be(trace.sector);
+        trace.bytes = u32::from_be(trace.bytes);
+        trace.action = u32::from_be(trace.action);
+        trace.pid = u32::from_be(trace.pid);
+        trace.device = u32::from_be(trace.device);
+        trace.cpu = u32::from_be(trace.cpu);
+        trace.error = u16::from_be(trace.error);
+        trace.pdu_len = u16::from_be(trace.pdu_len);
+    } else if endianness == Endianness::Little {
+        trace.magic = u32::from_le(trace.magic);
+        trace.sequence = u32::from_le(trace.sequence);
+        trace.time = u64::from_le(trace.time);
+        trace.sector = u64::from_le(trace.sector);
+        trace.bytes = u32::from_le(trace.bytes);
+        trace.action = u32::from_le(trace.action);
+        trace.pid = u32::from_le(trace.pid);
+        trace.device = u32::from_le(trace.device);
+        trace.cpu = u32::from_le(trace.cpu);
+        trace.error = u16::from_le(trace.error);
+        trace.pdu_len = u16::from_le(trace.pdu_len);
+    }
 }
 
 pub fn format_trace(trace: &blk_io_trace) -> String {
@@ -335,7 +353,7 @@ mod tests {
 
         // File 2: swapped endian
         let mut trace2 = get_test_trace(2, 100);
-        correct_endianness(&mut trace2);
+        correct_endianness(&mut trace2, Endianness::Big); // Assuming host is not big-endian
         let mut file2 = fs::File::create(path.join("test.blktrace.1")).unwrap();
         file2.write_all(&unsafe { std::mem::transmute::<_, [u8; 48]>(trace2) }).unwrap();
 
