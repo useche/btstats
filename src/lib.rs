@@ -34,8 +34,16 @@ struct TraceFile {
 
 impl TraceFile {
     fn new(path: &Path) -> Result<Self, io::Error> {
-        let file = File::open(path)?;
-        Ok(TraceFile { file, endianness: Endianness::Unknown })
+        let mut file = File::open(path)?;
+        let mut trace_buf = [0u8; std::mem::size_of::<blk_io_trace>()];
+
+        file.read_exact(&mut trace_buf)?;
+        let trace: blk_io_trace = unsafe { std::mem::transmute(trace_buf) };
+        let endianness = check_data_endianness(trace.magic);
+
+        file.seek(SeekFrom::Start(0))?;
+
+        Ok(TraceFile { file, endianness })
     }
 }
 
@@ -49,10 +57,6 @@ impl Iterator for TraceFile {
             match self.file.read_exact(&mut trace_buf) {
                 Ok(()) => {
                     let mut trace: blk_io_trace = unsafe { std::mem::transmute(trace_buf) };
-
-                    if self.endianness == Endianness::Unknown {
-                        self.endianness = check_data_endianness(trace.magic);
-                    }
 
                     if self.endianness == Endianness::NonNative {
                         correct_endianness(&mut trace);
