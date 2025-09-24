@@ -1,6 +1,4 @@
-use crate::bindings::*;
-use crate::BlkIoTrace;
-use crate::blk_io_trace::{check_data_endianness, correct_endianness, Endianness, BLK_TC_ACT};
+use super::blk_io_trace::BlkIoTrace;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::fs::{self, DirEntry, File};
@@ -9,57 +7,44 @@ use std::path::Path;
 
 struct TraceFile {
     file: File,
-    endianness: Endianness,
 }
 
 impl TraceFile {
-    fn new(path: &Path) -> Result<Self, io::Error> {
+    fn new(path: &Path) -> io::Result<Self> {
         Ok(TraceFile {
             file: File::open(path)?,
-            endianness: Endianness::Unknown,
         })
     }
 }
 
 impl Iterator for TraceFile {
-    type Item = Result<BlkIoTrace, io::Error>;
+    type Item = io::Result<BlkIoTrace>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let mut trace_buf = [0u8; std::mem::size_of::<BlkIoTrace>()];
+        let result: io::Result<BlkIoTrace> = (|| {
+            loop {
+                let mut trace_buf = [0u8; BlkIoTrace::SIZE];
 
-            match self.file.read_exact(&mut trace_buf) {
-                Ok(()) => {
-                    let mut trace: BlkIoTrace = unsafe { std::mem::transmute(trace_buf) };
+                self.file.read_exact(&mut trace_buf)?;
 
-                    if self.endianness == Endianness::Unknown {
-                        self.endianness = check_data_endianness(trace.magic);
-                    }
+                let trace = BlkIoTrace::from_bytes(trace_buf)?;
 
-                    correct_endianness(&mut trace, self.endianness);
-
-                    if (trace.magic & 0xffffff00) as u32 != BLK_IO_TRACE_MAGIC {
-                        return Some(Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "Bad trace magic",
-                        )));
-                    }
-
-                    if trace.pdu_len > 0 {
-                        if let Err(e) = self.file.seek(SeekFrom::Current(trace.pdu_len as i64)) {
-                            return Some(Err(e));
-                        }
-                    }
-
-                    if not_real_event(&trace) {
-                        continue;
-                    }
-
-                    return Some(Ok(trace));
+                let appendix_bytes = trace.trace().pdu_len;
+                if appendix_bytes > 0 {
+                    self.file.seek(SeekFrom::Current(appendix_bytes.into()))?;
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => return None,
-                Err(e) => return Some(Err(e)),
+
+                if !trace.real_event() {
+                    continue;
+                }
+
+                return Ok(trace);
             }
+        })();
+
+        match result {
+            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => None,
+            r => Some(r),
         }
     }
 }
@@ -71,7 +56,7 @@ struct HeapItem {
 
 impl Ord for HeapItem {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.event.time.cmp(&self.event.time)
+        other.event.trace().time.cmp(&self.event.trace().time)
     }
 }
 
@@ -83,7 +68,7 @@ impl PartialOrd for HeapItem {
 
 impl PartialEq for HeapItem {
     fn eq(&self, other: &Self) -> bool {
-        self.event.time == other.event.time
+        self.event.trace().time == other.event.trace().time
     }
 }
 
@@ -121,7 +106,7 @@ impl TraceReader {
     /// for files with the pattern `sda.blktrace.*` in the same directory.
     ///
     /// Returns an `io::Error` if no trace files are found or if they cannot be read.
-    pub fn new(device_path: &str) -> Result<Self, io::Error> {
+    pub fn new(device_path: &str) -> io::Result<Self> {
         let path = Path::new(device_path);
         let dir = path
             .parent()
@@ -181,14 +166,14 @@ impl TraceReader {
 
         let genesis = items
             .iter()
-            .min_by_key(|item| item.event.time)
-            .map(|item| item.event.time)
+            .min_by_key(|item| item.event.trace().time)
+            .map(|item| item.event.trace().time)
             .unwrap();
 
         let heap: BinaryHeap<HeapItem> = items
             .into_iter()
             .map(|mut item| {
-                item.event.time -= genesis;
+                item.event.reduce_time(genesis);
                 item
             })
             .collect();
@@ -198,7 +183,7 @@ impl TraceReader {
 }
 
 impl Iterator for TraceReader {
-    type Item = Result<BlkIoTrace, io::Error>;
+    type Item = io::Result<BlkIoTrace>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.heap.is_empty() {
@@ -211,7 +196,7 @@ impl Iterator for TraceReader {
         if let Some(next_event_result) = item.trace_file_iterator.next() {
             match next_event_result {
                 Ok(mut next_event) => {
-                    next_event.time -= self.genesis;
+                    next_event.reduce_time(self.genesis);
                     item.event = next_event;
                     self.heap.push(item);
                 }
@@ -223,34 +208,11 @@ impl Iterator for TraceReader {
     }
 }
 
-fn not_real_event(t: &BlkIoTrace) -> bool {
-    (t.action & BLK_TC_ACT(BLK_TC_NOTIFY)) != 0
-        || (t.action & BLK_TC_ACT(BLK_TC_DISCARD)) != 0
-        || (t.action & BLK_TC_ACT(BLK_TC_DRV_DATA)) != 0
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blk_io_trace;
     use std::io::Write;
     use tempfile::tempdir;
-
-    fn get_test_trace(sequence: u32, time: u64) -> BlkIoTrace {
-        BlkIoTrace {
-            magic: BLK_IO_TRACE_MAGIC | BLK_IO_TRACE_VERSION,
-            sequence,
-            time,
-            sector: 1024,
-            bytes: 4096,
-            action: (blk_io_trace::__BLK_TA_QUEUE | BLK_TC_ACT(BLK_TC_WRITE)),
-            pid: 123,
-            device: (253 << 20 | 1),
-            cpu: 2,
-            error: 0,
-            pdu_len: 0,
-        }
-    }
 
     #[test]
     fn test_multi_file_reading() {
@@ -258,13 +220,13 @@ mod tests {
         let path = dir.path();
 
         // Create file 1
-        let trace1 = get_test_trace(1, 200);
+        let trace1 = BlkIoTrace::for_test(1, 200).unwrap();
         let mut file1 = fs::File::create(path.join("test.blktrace.0")).unwrap();
         file1
             .write_all(&unsafe { std::mem::transmute::<_, [u8; 48]>(trace1) })
             .unwrap();
 
-        let trace2 = get_test_trace(2, 100);
+        let trace2 = BlkIoTrace::for_test(2, 100).unwrap();
         let mut file2 = fs::File::create(path.join("test.blktrace.1")).unwrap();
         file2
             .write_all(&unsafe { std::mem::transmute::<_, [u8; 48]>(trace2) })
@@ -274,12 +236,11 @@ mod tests {
         let mut events = reader.map(Result::unwrap);
 
         let event1 = events.next().unwrap();
-        assert_eq!(event1.sequence, 2);
+        assert_eq!(event1.trace().sequence, 2);
 
         let event2 = events.next().unwrap();
-        assert_eq!(event2.sequence, 1);
+        assert_eq!(event2.trace().sequence, 1);
 
         assert!(events.next().is_none());
     }
-
 }
