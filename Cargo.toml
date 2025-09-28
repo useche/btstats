@@ -10,3 +10,4 @@ bindgen = "0.69.4"
 
 [dev-dependencies]
 tempfile = "3"
+insta = "1.39.0"

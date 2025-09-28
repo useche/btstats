@@ -1,0 +1,6 @@
+---
+source: src/plugins/plugin_set.rs
+expression: plugin_set.result()
+---
+## Request Size
+Reqs. #: 1 Reads: 1 (1.00%) Writes: 0 (0.00%) Size:(min: 1 avg: 1.00 max: 1 (blks))

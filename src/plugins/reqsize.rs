@@ -2,7 +2,7 @@ use super::plugin::Plugin;
 use crate::blk_io_trace::{BlkIoTrace, IoAction, IoCategory};
 use std::cmp::{max, min};
 
-struct ReqSize {
+pub struct ReqSize {
     min: u32,
     max: u32,
     total_size_blks: u64,
@@ -25,8 +25,8 @@ impl Default for ReqSize {
 }
 
 impl Plugin for ReqSize {
-    fn name() -> impl ToString {
-        "Request Size"
+    fn name(&self) -> String {
+        "Request Size".to_string()
     }
 
     fn update(&mut self, trace: &BlkIoTrace) {
@@ -52,7 +52,7 @@ impl Plugin for ReqSize {
         self.total_size_blks += blks as u64;
     }
 
-    fn result(&self) -> impl ToString {
+    fn result(&self) -> String {
         let total_reqs = self.num_reads + self.num_writes;
         format!(
             "Reqs. #: {} Reads: {} ({:.2}%) Writes: {} ({:.2}%) Size:(min: {} avg: {:.2} max: {} (blks))",

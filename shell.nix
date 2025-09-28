@@ -8,6 +8,7 @@ pkgs.mkShell {
     gsl
     pkg-config
     bear
+    cargo-insta
   ];
 
   shellHook = ''
