@@ -3,4 +3,4 @@ source: src/plugins/plugin_set.rs
 expression: plugin_set.result()
 ---
 ## Request Size
-Reqs. #: 0 Reads: 0 (NaN%) Writes: 0 (NaN%) Size:(min: 4294967295 avg: NaN max: 0 (blks))
+No updates

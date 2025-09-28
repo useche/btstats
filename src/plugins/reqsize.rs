@@ -54,6 +54,11 @@ impl Plugin for ReqSize {
 
     fn result(&self) -> String {
         let total_reqs = self.num_reads + self.num_writes;
+
+        if total_reqs == 0 {
+            return "No updates".to_string();
+        }
+
         format!(
             "Reqs. #: {} Reads: {} ({:.2}%) Writes: {} ({:.2}%) Size:(min: {} avg: {:.2} max: {} (blks))",
             total_reqs,
@@ -158,5 +163,14 @@ mod tests {
             "Reqs. #: 2 Reads: 1 (0.50%) Writes: 1 (0.50%) Size:(min: 1 avg: 1.50 max: 2 (blks))"
         );
     }
-}
 
+    #[test]
+    fn test_no_updates() {
+        let mut req_size = ReqSize::default();
+
+        assert_eq!(
+            req_size.result(),
+            "No updates"
+        );
+    }
+}
