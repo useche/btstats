@@ -1,15 +1,7 @@
 use std::fmt::{self, Display};
 use std::io;
 
-mod bindings {
-    #![allow(dead_code)]
-    #![allow(non_upper_case_globals)]
-    #![allow(non_camel_case_types)]
-    #![allow(non_snake_case)]
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-}
-
-use bindings::{
+use crate::bindings::{
     blk_io_trace, BLK_IO_TRACE_MAGIC, BLK_TC_DISCARD, BLK_TC_DRV_DATA, BLK_TC_NOTIFY, BLK_TC_READ,
     BLK_TC_SYNC, BLK_TC_WRITE, __BLK_TA_ABORT, __BLK_TA_BACKMERGE, __BLK_TA_BOUNCE,
     __BLK_TA_COMPLETE, __BLK_TA_DRV_DATA, __BLK_TA_FRONTMERGE, __BLK_TA_GETRQ, __BLK_TA_INSERT,
@@ -21,6 +13,46 @@ enum Endianness {
     Unknown,
     Native,
     NonNative,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum IoCategory {
+    Unknown,
+    Read,
+    Write,
+    Discard,
+}
+
+impl IoCategory {
+    pub fn from(trace: &BlkIoTrace) -> Self {
+        let trace = trace.trace();
+        if (trace.action & BLK_TC_ACT(BLK_TC_READ)) != 0 {
+            Self::Read
+        } else if (trace.action & BLK_TC_ACT(BLK_TC_WRITE)) != 0 {
+            Self::Write
+        } else if (trace.action & BLK_TC_ACT(BLK_TC_DISCARD)) != 0 {
+            Self::Discard
+        } else {
+            Self::Unknown
+        }
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum IoAction {
+    Unknown,
+    Complete,
+}
+
+impl IoAction {
+    pub fn from(trace: &BlkIoTrace) -> Self {
+        let act = trace.trace().action & 0xffff;
+        if act == __BLK_TA_COMPLETE {
+            Self::Complete
+        } else {
+            Self::Unknown
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -51,7 +83,7 @@ impl BlkIoTrace {
 
     #[cfg(test)]
     pub fn for_test(sequence: u32, time: u64) -> io::Result<BlkIoTrace> {
-        use bindings::BLK_IO_TRACE_VERSION;
+        use crate::bindings::BLK_IO_TRACE_VERSION;
 
         let bytes: [u8; BlkIoTrace::SIZE] = unsafe {
             std::mem::transmute(blk_io_trace {
@@ -110,6 +142,18 @@ impl BlkIoTrace {
 
     pub fn reduce_time(&mut self, delta: u64) {
         self.0.time -= delta;
+    }
+
+    pub fn io_category(&self) -> IoCategory {
+        IoCategory::from(&self)
+    }
+
+    pub fn io_action(&self) -> IoAction {
+        IoAction::from(&self)
+    }
+
+    pub fn blks(&self) -> u32 {
+        self.0.bytes >> 9
     }
 }
 
@@ -201,5 +245,60 @@ mod tests {
         let non_native_trace = BlkIoTrace::from_bytes(non_native_trace_buf).unwrap();
 
         assert_eq!(native_trace, non_native_trace);
+    }
+
+    #[test]
+    fn test_blks() {
+        let mut trace = BlkIoTrace::for_test(1, 1).unwrap();
+        trace.0.bytes = 512;
+        assert_eq!(trace.blks(), 1);
+        trace.0.bytes = 1024;
+        assert_eq!(trace.blks(), 2);
+        trace.0.bytes = 4096;
+        assert_eq!(trace.blks(), 8);
+        trace.0.bytes = 0;
+        assert_eq!(trace.blks(), 0);
+    }
+
+    #[test]
+    fn test_io_category() {
+        let mut trace = BlkIoTrace::for_test(1, 1).unwrap();
+        trace.0.action = BLK_TC_ACT(BLK_TC_READ);
+        assert_eq!(trace.io_category(), IoCategory::Read);
+        trace.0.action = BLK_TC_ACT(BLK_TC_WRITE);
+        assert_eq!(trace.io_category(), IoCategory::Write);
+        trace.0.action = BLK_TC_ACT(BLK_TC_DISCARD);
+        assert_eq!(trace.io_category(), IoCategory::Discard);
+        trace.0.action = BLK_TC_ACT(BLK_TC_SYNC);
+        assert_eq!(trace.io_category(), IoCategory::Unknown);
+    }
+
+    #[test]
+    fn test_io_action() {
+        let mut trace = BlkIoTrace::for_test(1, 1).unwrap();
+        trace.0.action = __BLK_TA_COMPLETE;
+        assert_eq!(trace.io_action(), IoAction::Complete);
+        trace.0.action = __BLK_TA_QUEUE;
+        assert_eq!(trace.io_action(), IoAction::Unknown);
+    }
+
+    #[test]
+    fn test_real_event() {
+        let mut trace = BlkIoTrace::for_test(1, 1).unwrap();
+        trace.0.action = BLK_TC_ACT(BLK_TC_NOTIFY);
+        assert!(!trace.real_event());
+        trace.0.action = BLK_TC_ACT(BLK_TC_DISCARD);
+        assert!(!trace.real_event());
+        trace.0.action = BLK_TC_ACT(BLK_TC_DRV_DATA);
+        assert!(!trace.real_event());
+        trace.0.action = BLK_TC_ACT(BLK_TC_READ);
+        assert!(trace.real_event());
+    }
+
+    #[test]
+    fn test_reduce_time() {
+        let mut trace = BlkIoTrace::for_test(1, 100).unwrap();
+        trace.reduce_time(10);
+        assert_eq!(trace.trace().time, 90);
     }
 }
