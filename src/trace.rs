@@ -82,24 +82,24 @@ impl Eq for HeapItem {}
 /// # Example
 ///
 /// ```ignore
-/// use blktrace_reader::{TraceReader, format_trace, blk_io_trace};
+/// use trace::{Reader, blk_io_trace};
 ///
-/// // Now, use TraceReader to read the events.
+/// // Now, use Reader to read the events.
 /// let device_path = path.join("test").to_str().unwrap().to_string();
-/// let reader = TraceReader::new(&device_path).unwrap();
+/// let reader = Reader::new(&device_path).unwrap();
 ///
 /// for event_result in reader {
 ///     let event = event_result.unwrap();
-///     println!("{}", format_trace(&event));
+///     println!("{}", event);
 /// }
 /// ```
-pub struct TraceReader {
+pub struct Reader {
     heap: BinaryHeap<HeapItem>,
     genesis: u64,
 }
 
-impl TraceReader {
-    /// Creates a new `TraceReader`.
+impl Reader {
+    /// Creates a new `Reader`.
     ///
     /// This function finds all `blktrace` files for a given device and prepares to read them. The
     /// `device_path` should be the path to the block device (e.g., "sda"). The function will look
@@ -178,11 +178,11 @@ impl TraceReader {
             })
             .collect();
 
-        Ok(TraceReader { heap, genesis })
+        Ok(Reader { heap, genesis })
     }
 }
 
-impl Iterator for TraceReader {
+impl Iterator for Reader {
     type Item = io::Result<BlkIoTrace>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -232,7 +232,7 @@ mod tests {
             .write_all(&unsafe { std::mem::transmute::<_, [u8; 48]>(trace2) })
             .unwrap();
 
-        let reader = TraceReader::new(path.join("test").to_str().unwrap()).unwrap();
+        let reader = Reader::new(path.join("test").to_str().unwrap()).unwrap();
         let mut events = reader.map(Result::unwrap);
 
         let event1 = events.next().unwrap();

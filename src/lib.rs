@@ -1,4 +1,4 @@
 pub mod blk_io_trace;
-pub mod trace_file;
+pub mod trace;
 
-pub use trace_file::TraceReader;
+pub use trace::Reader;
