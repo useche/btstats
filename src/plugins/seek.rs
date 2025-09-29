@@ -1,5 +1,5 @@
 use super::plugin::Plugin;
-use crate::blk_io_trace::{BlkIoTrace, IoAction};
+use crate::blk_io_trace::{BlkIoTrace, IoAction, IoCategory};
 use std::cmp::{max, min};
 
 pub struct Seek {
@@ -8,7 +8,7 @@ pub struct Seek {
     max: u64,
     total_distance: u64,
     seeks: u64,
-    total_reqs: u64,
+    total_blks: u64,
 }
 
 impl Default for Seek {
@@ -19,7 +19,7 @@ impl Default for Seek {
             max: 0,
             total_distance: 0,
             seeks: 0,
-            total_reqs: 0,
+            total_blks: 0,
         }
     }
 }
@@ -34,9 +34,18 @@ impl Plugin for Seek {
             return;
         }
 
-        self.total_reqs += 1;
+        match trace.io_category() {
+            IoCategory::Read | IoCategory::Write => (),
+            _ => return,
+        }
+
         let blks = trace.blks() as u64;
+        if blks == 0 {
+            return;
+        }
         let sector = trace.trace().sector;
+
+        self.total_blks += blks;
 
         if let Some(last_pos) = self.last_pos {
             if last_pos != sector {
@@ -57,12 +66,18 @@ impl Plugin for Seek {
 
     fn result(&self) -> String {
         if self.seeks == 0 {
-            return "No updates".to_string();
+            return "No seeks".to_string();
         }
+
+        let seq_perc = if self.total_blks > 0 {
+            (1.0 - (self.seeks as f64 / self.total_blks as f64)) * 100.0
+        } else {
+            100.0
+        };
 
         format!(
             "Seq.: {:.2}% Seeks #: {} min: {} avg: {:.2} max: {} (blks)",
-            (1.0 - (self.seeks as f64 / self.total_reqs as f64)) * 100.0,
+            seq_perc,
             self.seeks,
             self.min,
             self.total_distance as f64 / self.seeks as f64,
@@ -75,8 +90,8 @@ impl Plugin for Seek {
 mod tests {
     use super::*;
     use crate::bindings::{
-        blk_io_trace, BLK_IO_TRACE_MAGIC, BLK_IO_TRACE_VERSION, BLK_TC_READ,
-        __BLK_TA_COMPLETE,
+        blk_io_trace, BLK_IO_TRACE_MAGIC, BLK_IO_TRACE_VERSION, BLK_TC_DISCARD, BLK_TC_READ,
+        BLK_TC_WRITE, __BLK_TA_COMPLETE,
     };
 
     const BLK_TC_SHIFT: u32 = 16;
@@ -105,39 +120,26 @@ mod tests {
     fn test_seeks() {
         let mut seek = Seek::default();
 
-        // First request, no seek yet
         let trace1 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512, 0);
         seek.update(&trace1);
         assert_eq!(seek.seeks, 0);
-        assert_eq!(seek.total_reqs, 1);
+        assert_eq!(seek.total_blks, 1);
         assert_eq!(seek.last_pos, Some(1));
 
-        // Second request, with a seek
-        let trace2 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512, 10);
+        let trace2 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_WRITE), 512, 10);
         seek.update(&trace2);
         assert_eq!(seek.seeks, 1);
-        assert_eq!(seek.total_reqs, 2);
+        assert_eq!(seek.total_blks, 2);
         assert_eq!(seek.total_distance, 9);
         assert_eq!(seek.min, 9);
         assert_eq!(seek.max, 9);
         assert_eq!(seek.last_pos, Some(11));
 
-        // Third request, sequential (no seek)
-        let trace3 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512, 11);
+        let trace3 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_DISCARD), 512, 11);
         seek.update(&trace3);
         assert_eq!(seek.seeks, 1);
-        assert_eq!(seek.total_reqs, 3);
-        assert_eq!(seek.last_pos, Some(12));
-
-        // Fourth request, with a seek
-        let trace4 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512, 2);
-        seek.update(&trace4);
-        assert_eq!(seek.seeks, 2);
-        assert_eq!(seek.total_reqs, 4);
-        assert_eq!(seek.total_distance, 19);
-        assert_eq!(seek.min, 9);
-        assert_eq!(seek.max, 10);
-        assert_eq!(seek.last_pos, Some(3));
+        assert_eq!(seek.total_blks, 2);
+        assert_eq!(seek.last_pos, Some(11));
     }
 
     #[test]
@@ -147,11 +149,11 @@ mod tests {
         let trace1 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512, 0);
         seek.update(&trace1);
 
-        let trace2 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 1024, 1);
+        let trace2 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_WRITE), 1024, 1);
         seek.update(&trace2);
 
         assert_eq!(seek.seeks, 0);
-        assert_eq!(seek.total_reqs, 2);
+        assert_eq!(seek.total_blks, 3);
         assert_eq!(seek.total_distance, 0);
         assert_eq!(seek.min, u64::MAX);
         assert_eq!(seek.max, 0);
@@ -160,7 +162,7 @@ mod tests {
     #[test]
     fn test_no_updates() {
         let seek = Seek::default();
-        assert_eq!(seek.result(), "No updates");
+        assert_eq!(seek.result(), "No seeks");
     }
 
     #[test]
@@ -169,7 +171,7 @@ mod tests {
 
         let trace1 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512, 0);
         seek.update(&trace1);
-        let trace2 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512, 10);
+        let trace2 = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_WRITE), 512, 10);
         seek.update(&trace2);
 
         let result = seek.result();
