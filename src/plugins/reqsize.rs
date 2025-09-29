@@ -34,7 +34,7 @@ impl Plugin for ReqSize {
             return;
         }
 
-        let blks = dbg!(trace.blks());
+        let blks = trace.blks();
 
         if blks == 0 {
             return;
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_no_updates() {
-        let mut req_size = ReqSize::default();
+        let req_size = ReqSize::default();
 
         assert_eq!(
             req_size.result(),

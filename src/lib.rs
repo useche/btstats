@@ -9,5 +9,3 @@ pub mod bindings {
 pub mod blk_io_trace;
 pub mod trace;
 pub mod plugins;
-
-pub use trace::Reader;
