@@ -162,7 +162,7 @@ mod tests {
         let result = req_size.result().to_string();
         assert_eq!(
             result,
-            "Reqs. #: 2 Reads: 1 (0.50%) Writes: 1 (0.50%) Size:(min: 1 avg: 1.50 max: 2 (blks))"
+            "Reqs. #: 2 Reads: 1 (50.00%) Writes: 1 (50.00%) Discard: 0 (0.00%) Size:(min: 1 avg: 1.50 max: 2 (blks))"
         );
     }
 

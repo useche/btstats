@@ -2,6 +2,7 @@ use crate::blk_io_trace::BlkIoTrace;
 
 use super::plugin::Plugin;
 use super::reqsize::ReqSize;
+use super::seek::Seek;
 
 pub struct PluginSet {
     plugins: Vec<Box<dyn Plugin>>,
@@ -10,7 +11,7 @@ pub struct PluginSet {
 impl Default for PluginSet {
     fn default() -> Self {
         Self {
-            plugins: vec![Box::new(ReqSize::default())],
+            plugins: vec![Box::new(ReqSize::default()), Box::new(Seek::default())],
         }
     }
 }
@@ -43,12 +44,12 @@ mod tests {
         act << BLK_TC_SHIFT
     }
 
-    fn create_trace(action: u32, bytes: u32) -> BlkIoTrace {
+    fn create_trace(action: u32, bytes: u32, sector: u64) -> BlkIoTrace {
         let trace = blk_io_trace {
             magic: BLK_IO_TRACE_MAGIC | BLK_IO_TRACE_VERSION,
             sequence: 0,
             time: 0,
-            sector: 0,
+            sector,
             bytes,
             action,
             pid: 0,
@@ -69,7 +70,7 @@ mod tests {
     #[test]
     fn test_plugin_set_update_with_non_complete() {
         let mut plugin_set = PluginSet::default();
-        let trace = create_trace(__BLK_TA_QUEUE | blk_tc_act(BLK_TC_READ), 512);
+        let trace = create_trace(__BLK_TA_QUEUE | blk_tc_act(BLK_TC_READ), 512, 0);
         plugin_set.update(&trace);
         insta::assert_snapshot!(plugin_set.result())
     }
@@ -77,7 +78,7 @@ mod tests {
     #[test]
     fn test_plugin_set_one_update_with_complete() {
         let mut plugin_set = PluginSet::default();
-        let trace = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512);
+        let trace = create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512, 0);
         plugin_set.update(&trace);
         insta::assert_snapshot!(plugin_set.result())
     }
@@ -86,10 +87,10 @@ mod tests {
     fn test_plugin_set_update_with_complete() {
         let mut plugin_set = PluginSet::default();
         let traces = vec![
-            create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512),
-            create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_WRITE), 1024),
-            create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_DISCARD), 2048),
-            create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 2048),
+            create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 512, 0),
+            create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_WRITE), 1024, 10),
+            create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_DISCARD), 2048, 2),
+            create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 2048, 12),
         ];
 
         for trace in &traces {
