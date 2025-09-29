@@ -4,3 +4,5 @@ expression: plugin_set.result()
 ---
 ## Request Size
 Reqs. #: 4 Reads: 2 (50.00%) Writes: 1 (25.00%) Discard: 1 (25.00%) Size:(min: 1 avg: 2.75 max: 4 (blks))
+## Seek
+Seq.: 25.00% Seeks #: 3 min: 6 avg: 8.33 max: 10 (blks)

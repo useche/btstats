@@ -2,7 +2,7 @@ APP=btstats
 APP_O=$(APP).o
 
 # All .c files in statplug directory are considered plugins.
-PLUG_SRCS = $(wildcard statplug/*.c)
+PLUG_SRCS = $(filter-out statplug/seek.c,$(wildcard statplug/*.c))
 PLUGS = $(patsubst %.c,%.o,$(PLUG_SRCS))
 
 # .c in trace reader
