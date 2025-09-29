@@ -65,15 +65,14 @@ impl Plugin for Seek {
     }
 
     fn result(&self) -> String {
+        if self.total_blks == 0 {
+            return "No updates".to_string();
+        }
         if self.seeks == 0 {
             return "No seeks".to_string();
         }
 
-        let seq_perc = if self.total_blks > 0 {
-            (1.0 - (self.seeks as f64 / self.total_blks as f64)) * 100.0
-        } else {
-            100.0
-        };
+        let seq_perc = (1.0 - (self.seeks as f64 / self.total_blks as f64)) * 100.0;
 
         format!(
             "Seq.: {:.2}% Seeks #: {} min: {} avg: {:.2} max: {} (blks)",
@@ -157,12 +156,13 @@ mod tests {
         assert_eq!(seek.total_distance, 0);
         assert_eq!(seek.min, u64::MAX);
         assert_eq!(seek.max, 0);
+        assert_eq!(seek.result(), "No seeks");
     }
 
     #[test]
     fn test_no_updates() {
         let seek = Seek::default();
-        assert_eq!(seek.result(), "No seeks");
+        assert_eq!(seek.result(), "No updates");
     }
 
     #[test]
