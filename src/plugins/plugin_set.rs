@@ -1,5 +1,6 @@
 use crate::blk_io_trace::BlkIoTrace;
 
+use super::merge::Merge;
 use super::plugin::Plugin;
 use super::reqsize::ReqSize;
 use super::seek::Seek;
@@ -11,7 +12,11 @@ pub struct PluginSet {
 impl Default for PluginSet {
     fn default() -> Self {
         Self {
-            plugins: vec![Box::new(ReqSize::default()), Box::new(Seek::default())],
+            plugins: vec![
+                Box::new(ReqSize::default()),
+                Box::new(Seek::default()),
+                Box::new(Merge::default()),
+            ],
         }
     }
 }
