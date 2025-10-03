@@ -41,7 +41,8 @@ mod tests {
     use super::*;
     use crate::bindings::{
         blk_io_trace, BLK_IO_TRACE_MAGIC, BLK_IO_TRACE_VERSION, BLK_TC_DISCARD, BLK_TC_READ,
-        BLK_TC_WRITE, __BLK_TA_COMPLETE, __BLK_TA_QUEUE,
+        BLK_TC_WRITE, __BLK_TA_BACKMERGE, __BLK_TA_COMPLETE, __BLK_TA_FRONTMERGE,
+        __BLK_TA_INSERT, __BLK_TA_QUEUE,
     };
 
     const BLK_TC_SHIFT: u32 = 16;
@@ -96,6 +97,22 @@ mod tests {
             create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_WRITE), 1024, 10),
             create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_DISCARD), 2048, 2),
             create_trace(__BLK_TA_COMPLETE | blk_tc_act(BLK_TC_READ), 2048, 12),
+        ];
+
+        for trace in &traces {
+            plugin_set.update(trace);
+        }
+
+        insta::assert_snapshot!(plugin_set.result())
+    }
+
+    #[test]
+    fn test_plugin_set_update_with_merge() {
+        let mut plugin_set = PluginSet::default();
+        let traces = vec![
+            create_trace(__BLK_TA_INSERT, 0, 0),
+            create_trace(__BLK_TA_BACKMERGE, 0, 0),
+            create_trace(__BLK_TA_FRONTMERGE, 0, 0),
         ];
 
         for trace in &traces {
