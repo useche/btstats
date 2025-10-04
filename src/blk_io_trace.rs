@@ -42,15 +42,20 @@ impl IoCategory {
 pub enum IoAction {
     Unknown,
     Complete,
+    BackMerge,
+    FrontMerge,
+    Insert,
 }
 
 impl IoAction {
     pub fn from(trace: &BlkIoTrace) -> Self {
         let act = trace.trace().action & 0xffff;
-        if act == __BLK_TA_COMPLETE {
-            Self::Complete
-        } else {
-            Self::Unknown
+        match act {
+            __BLK_TA_COMPLETE => Self::Complete,
+            __BLK_TA_BACKMERGE => Self::BackMerge,
+            __BLK_TA_FRONTMERGE => Self::FrontMerge,
+            __BLK_TA_INSERT => Self::Insert,
+            _ => Self::Unknown,
         }
     }
 }
@@ -280,6 +285,12 @@ mod tests {
         assert_eq!(trace.io_action(), IoAction::Complete);
         trace.0.action = __BLK_TA_QUEUE;
         assert_eq!(trace.io_action(), IoAction::Unknown);
+        trace.0.action = __BLK_TA_BACKMERGE;
+        assert_eq!(trace.io_action(), IoAction::BackMerge);
+        trace.0.action = __BLK_TA_FRONTMERGE;
+        assert_eq!(trace.io_action(), IoAction::FrontMerge);
+        trace.0.action = __BLK_TA_INSERT;
+        assert_eq!(trace.io_action(), IoAction::Insert);
     }
 
     #[test]
